@@ -1,0 +1,46 @@
+# secrets and local config
+.env
+
+# runtime data: databases, vector store, uploaded PDFs (can be private)
+data/
+
+# virtual environment and caches
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# personal planning documents
+RAG_Complete_Phase_Roadmap.docx
+RAG_Learning_Roadmap_Final.docx
+RAG_Project_Roadmapwhat_to_learn_and_when.pdf
+RAG_Project_Synopsis.pdf
+
+# local Claude Code settings (machine-specific)
+.claude/
+
+# old backup
+src/api_old.py
+
+# personal planning documents and Word lock files
+*.docx
+*.pdf
+~$*
+
+# test data and old backups
+src/fake.txt
+src/api_before_5d.py
+
+frontend/wifiviewer.py
+src/test.py
+
+# local scratch files and the old front page
+frontend/wifiviewer.py
+src/test.py
+frontend/index.html
