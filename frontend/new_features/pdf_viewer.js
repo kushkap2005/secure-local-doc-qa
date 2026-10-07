@@ -495,14 +495,18 @@
       const page = parseInt(m[2], 10);
       const hash = hashForName(name);
       if (!hash) return;
-      const body = head.parentElement.querySelector(".source-passage-text");
-      const pageOnly = head.parentElement.dataset.pageText === "1"; // saved answer: whole page text, nothing to highlight
       const b = document.createElement("button");
       b.type = "button";
       b.className = "pv-open";
       b.textContent = "Open PDF";
       b.title = "Open the PDF at this page with the passage highlighted";
-      b.addEventListener("click", () => openViewer({ hash, name, page, passage: body && !pageOnly ? body.textContent : "" }));
+      b.addEventListener("click", () => {
+        // checked at click time: a saved answer's card first shows the whole page
+        // (nothing to highlight) and may switch to the closest passage once found
+        const pageOnly = head.parentElement.dataset.pageText === "1";
+        const text = head.parentElement.querySelector(".source-passage-text");
+        openViewer({ hash, name, page, passage: text && !pageOnly ? text.textContent : "" });
+      });
       head.insertBefore(b, head.lastElementChild);
     });
   }
@@ -516,36 +520,42 @@
   // role, the server refuses and the card says so.
   const CHIP_LABEL = /(.+?)\s\u00b7\sp(\d+)/;
 
-  async function fetchPageText(hash, page) {
+  async function fetchPageText(hash, page, question) {
     const token = typeof authToken !== "undefined" ? authToken : null;
+    const q = question ? "?q=" + encodeURIComponent(question.slice(0, 4000)) : "";
     try {
-      const res = await fetch(`${API_BASE}/documents/${encodeURIComponent(hash)}/pages/${page}/text`, {
+      const res = await fetch(`${API_BASE}/documents/${encodeURIComponent(hash)}/pages/${page}/text${q}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (res.status === 401 && token && typeof unauthorizedHandler === "function") unauthorizedHandler("Please sign in again.");
       if (!res.ok) return null;
       const data = await res.json();
-      return data.chunks && data.chunks.length ? data.chunks : null;
+      if (!data.chunks || !data.chunks.length) return null;
+      return { chunks: data.chunks, best: data.best && data.best.length ? data.best : null };
     } catch (e) {
       return null;
     }
   }
 
-  function fillPagePanel(panel, name, page, chunks) {
+  function fillPagePanel(panel, name, page, found) {
     panel.textContent = "";
-    panel.dataset.pageText = "1";
+    // "1" = whole page shown, nothing specific to highlight. Cleared when the
+    // passage that best matches the old question was found.
+    const best = found && found.best;
+    if (best) delete panel.dataset.pageText;
+    else panel.dataset.pageText = "1";
     const head = document.createElement("div");
     head.className = "source-passage-head";
     const l = document.createElement("span");
     l.textContent = name + " \u00b7 page " + page;
     const r = document.createElement("span");
-    r.textContent = "text on this page";
+    r.textContent = best ? "closest passage to your question" : "text on this page";
     head.append(l, r);
     const body = document.createElement("div");
     body.className = "source-passage-text";
     // textContent only: document text is untrusted
-    body.textContent = chunks
-      ? chunks.join("\n\n")
+    body.textContent = found
+      ? (best || found.chunks).join("\n\n")
       : "The text of this page isn't available (the document may no longer be visible to your role, or it was removed). You can still try opening the PDF.";
     panel.append(head, body);
   }
@@ -590,9 +600,13 @@
         panel.querySelector(".source-passage-text").textContent = "Loading\u2026";
         panel.hidden = false;
         const hash = hashForName(name);
-        const chunks = hash ? await fetchPageText(hash, page) : null;
+        // the question this saved answer replied to: the user bubble just above it
+        const row = chip.closest(".msg-row");
+        const prev = row && row.previousElementSibling;
+        const qEl = prev && prev.classList.contains("msg-row-user") ? prev.querySelector(".msg-bubble") : null;
+        const found = hash ? await fetchPageText(hash, page, qEl ? qEl.textContent.trim() : "") : null;
         if (panel.hidden || panel.dataset.owner !== chip.dataset.pvIndex) return; // closed or switched meanwhile
-        fillPagePanel(panel, name, page, chunks);
+        fillPagePanel(panel, name, page, found);
       };
 
       chip.addEventListener("click", (e) => {

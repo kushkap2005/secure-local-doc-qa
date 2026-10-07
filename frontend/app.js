@@ -221,6 +221,9 @@ const el = {
   dialogOverlay: document.getElementById("dialog-overlay"),
   dialogConfirm: document.getElementById("dialog-confirm"),
   dialogCancel: document.getElementById("dialog-cancel"),
+  signoutOverlay: document.getElementById("signout-overlay"),
+  signoutCancel: document.getElementById("signout-cancel"),
+  signoutConfirm: document.getElementById("signout-confirm"),
 
   paletteBtn: document.getElementById("command-palette-btn"),
   paletteOverlay: document.getElementById("palette-overlay"),
@@ -646,6 +649,7 @@ async function applyLogin(token, username, role) {
   localStorage.setItem(AUTH_TOKEN_KEY, token);
   Api.setToken(token);
   renderAccountArea();
+  refreshStatus();
   await loadConversationsForSession();
   await loadDocuments();
 }
@@ -661,14 +665,24 @@ function clearSession() {
   renderDocList();
 }
 
-async function logoutFlow() {
+/** Asks first, so a stray click on the sign-out button doesn't end the session. */
+function logoutFlow() {
+  if (!state.username) return;
+  openOverlay(el.signoutOverlay, el.signoutCancel); // Cancel has focus: Enter alone won't sign out
+}
+
+function closeSignoutDialog() {
+  closeOverlay(el.signoutOverlay, el.accountArea);
+}
+
+async function performLogout() {
+  closeOverlay(el.signoutOverlay);
   clearSession();
   state.conversations = [];
   await createConversation(); // fresh, empty transcript — nothing carries over to the next person
   showToast(STRINGS.signedOut);
   openAuthDialog();
 }
-
 /** The API said our token is no longer valid (expired, or an admin changed our
  *  role). Sign out, then ask the user to sign in again with the reason. */
 async function handleSessionExpired(message) {
@@ -1287,7 +1301,7 @@ function closeOverlay(overlay, focusBackEl) {
 }
 
 function anyOverlayOpen() {
-  return !el.dialogOverlay.hidden || !el.paletteOverlay.hidden || !el.shortcutsOverlay.hidden || !el.authOverlay.hidden || !el.adminOverlay.hidden || !el.docLevelOverlay.hidden;
+  return !el.dialogOverlay.hidden || !el.paletteOverlay.hidden || !el.shortcutsOverlay.hidden || !el.authOverlay.hidden || !el.adminOverlay.hidden || !el.docLevelOverlay.hidden || !el.signoutOverlay.hidden;
 }
 
 function closeTopOverlay() {
@@ -1296,6 +1310,7 @@ function closeTopOverlay() {
   else if (!el.authOverlay.hidden) closeOverlay(el.authOverlay, el.accountArea);
   else if (!el.adminOverlay.hidden) closeAdminDialog();
   else if (!el.docLevelOverlay.hidden) closeDocLevelDialog();
+  else if (!el.signoutOverlay.hidden) closeSignoutDialog();
   else if (!el.dialogOverlay.hidden) closeOverlay(el.dialogOverlay, el.resetBtn);
 }
 
@@ -1592,6 +1607,11 @@ function initEvents() {
   el.resetBtn.addEventListener("click", openDialog);
   el.dialogCancel.addEventListener("click", closeDialog);
   el.dialogConfirm.addEventListener("click", performReset);
+  el.signoutCancel.addEventListener("click", closeSignoutDialog);
+  el.signoutConfirm.addEventListener("click", performLogout);
+  el.signoutOverlay.addEventListener("click", (e) => {
+    if (e.target === el.signoutOverlay) closeSignoutDialog();
+  });
   el.dialogOverlay.addEventListener("click", (e) => {
     if (e.target === el.dialogOverlay) closeDialog();
   });
@@ -1740,11 +1760,12 @@ async function init() {
   renderAccountArea(); // signed-out view first; replaced below if a saved session is still valid
 
   const { signedIn, notice } = await initAuth();
+  refreshStatus();
   await loadConversationsForSession();
   if (signedIn) await loadDocuments();
   else openAuthDialog(notice);
 
-  refreshStatus();
+  
   setInterval(refreshStatus, STATUS_POLL_MS);
 }
 

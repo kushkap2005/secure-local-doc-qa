@@ -11,7 +11,9 @@ file. The built-in PDF viewer needs the original, so this file:
   * GET /documents/{file_hash}/pages/{page}/text   the stored text of one page
         (used when an OLD saved answer's source chip is clicked: chat history
         keeps no document text, so the text is fetched again at that moment,
-        under the viewer's CURRENT role)
+        under the viewer's CURRENT role). With ?q=<the old question> it also
+        returns "best": the one or two chunks on that page closest in meaning
+        to that question, so the viewer can highlight the passage again.
 
 Access rule for the GET route: exactly the same as searching. The caller must
 be signed in, and the document must be one their role may see
@@ -34,7 +36,9 @@ import os
 import re
 import shutil
 
-from fastapi import APIRouter, Depends, HTTPException, Path
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi.responses import FileResponse
 
 from auth import require_role
@@ -107,6 +111,7 @@ def make_router(visible_hashes, store=None, shared_docs_id: str = "shared") -> A
         def get_page_text(
             file_hash: str,
             page: int = Path(..., ge=1, le=100000),
+            q: Optional[str] = Query(None, max_length=4000),
             current_user: dict = Depends(require_role("Guest")),
         ):
             not_found = HTTPException(status_code=404, detail="Text not available.")
@@ -114,20 +119,33 @@ def make_router(visible_hashes, store=None, shared_docs_id: str = "shared") -> A
                 raise not_found
             if file_hash not in visible_hashes(current_user["role"]):
                 raise not_found  # same answer as "doesn't exist"
-            found = store.vectorstore.get(
-                where={
-                    "$and": [
-                        {"user_id": shared_docs_id},
-                        {"file_hash": file_hash},
-                        {"page_number": page},
-                    ]
-                },
-                include=["documents"],
-            )
+            page_where = {
+                "$and": [
+                    {"user_id": shared_docs_id},
+                    {"file_hash": file_hash},
+                    {"page_number": page},
+                ]
+            }
+            found = store.vectorstore.get(where=page_where, include=["documents"])
             pairs = sorted(zip(found.get("ids", []), found.get("documents", [])), key=lambda p: _chunk_order(p[0]))
             chunks = [text for _id, text in pairs if text]
             if not chunks:
                 raise not_found
-            return {"page": page, "chunks": chunks}
+            result = {"page": page, "chunks": chunks}
+            if q and q.strip():
+                # Which passage on this page was the answer built from? Not stored
+                # (history keeps no document text), so find it again: same embedding
+                # and distance as a normal search, but only this page's chunks.
+                try:
+                    scored = store.vectorstore.similarity_search_with_score(
+                        q.strip(), k=min(2, len(chunks)), filter=page_where
+                    )
+                    best = [(1 - dist, doc.page_content) for doc, dist in scored if doc.page_content]
+                    best.sort(key=lambda t: t[0], reverse=True)
+                    # the best one, plus the runner-up only if it is nearly as close
+                    result["best"] = [text for i, (score, text) in enumerate(best) if i == 0 or score >= best[0][0] - 0.05]
+                except Exception:
+                    pass  # no highlight is better than no page text
+            return result
 
     return router

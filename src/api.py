@@ -75,6 +75,9 @@ app.add_middleware(
 init_db()  # creates the users / document_permissions tables if missing
 store = VectorStore()
 
+from audit_log import install as install_audit_log
+install_audit_log(app)
+
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB — matches the limit shown in the frontend
 UPLOAD_CHUNK_SIZE = 1024 * 1024  # stream in 1 MB pieces so large files don't spike RAM
 
@@ -110,6 +113,8 @@ install_spellfix(store)
 # Feature 3: keep uploaded PDFs and serve them (role-checked) to the PDF viewer.
 from pdf_files import make_router as make_pdf_router, save_pdf, delete_all_pdfs
 app.include_router(make_pdf_router(visible_hashes, store, SHARED_DOCS_ID))
+from account_settings import make_router as make_account_router
+app.include_router(make_account_router())
 
 
 def optional_user(authorization: Optional[str] = Header(None)) -> Optional[dict]:

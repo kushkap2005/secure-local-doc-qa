@@ -356,6 +356,17 @@
     </div>
   </div>
 
+    <div class="dialog-overlay" id="signout-overlay" hidden>
+    <div class="dialog" role="alertdialog" aria-modal="true" aria-labelledby="signout-title" aria-describedby="signout-body">
+      <h2 class="dialog-title" id="signout-title">Sign out?</h2>
+      <p class="dialog-body" id="signout-body">You'll need to sign in again to ask questions or see documents.</p>
+      <div class="dialog-actions">
+        <button class="btn btn-ghost" id="signout-cancel" type="button">Cancel</button>
+        <button class="btn btn-danger" id="signout-confirm" type="button">Sign out</button>
+      </div>
+    </div>
+  </div>
+
   <div class="dialog-overlay" id="doc-level-overlay" hidden>
     <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="doc-level-title">
       <h2 class="dialog-title" id="doc-level-title">Who can see this document?</h2>
@@ -387,6 +398,8 @@
   <script src="new_features/chat_history.js"></script>
   <script src="new_features/pdf_viewer.js"></script>
   <script src="new_features/question_counter.js"></script>
-
+  <script src="new_features/audit_log.js"></script>
+  <script src="new_features/account_settings.js"></script>
+  <script src="new_features/export_convo.js"></script>
 </body>
 </html>
