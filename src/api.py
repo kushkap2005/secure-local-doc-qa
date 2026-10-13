@@ -75,6 +75,7 @@ app.add_middleware(
 init_db()  # creates the users / document_permissions tables if missing
 store = VectorStore()
 
+
 from audit_log import install as install_audit_log
 install_audit_log(app)
 
@@ -85,6 +86,10 @@ UPLOAD_CHUNK_SIZE = 1024 * 1024  # stream in 1 MB pieces so large files don't sp
 # shared document pool that every role queries (Staff upload, everyone asks),
 # so every call passes this same constant instead of a per-account id.
 SHARED_DOCS_ID = "shared"
+
+from diagnostics import make_router as make_router_diagnostics
+app.include_router(make_router_diagnostics(store, SHARED_DOCS_ID))
+
 
 # Feature 14: Admin dashboard (read-only numbers, Admin only) lives in its own file.
 from admin_dashboard import make_router as make_dashboard_router
@@ -103,8 +108,17 @@ def visible_hashes(role: str) -> list:
     return get_accessible_file_hashes(role, all_hashes)
 # Feature 1: streaming answers (POST /ask/stream) lives in its own file.
 # It sits here, after visible_hashes(), because it is handed that function.
+
+
+
+from system_health import make_router as make_health_router
+app.include_router(make_health_router(store,SHARED_DOCS_ID,visible_hashes))
+
 from streaming import make_router as make_stream_router
 app.include_router(make_stream_router(store, SHARED_DOCS_ID, visible_hashes))
+
+from account_sessions import make_router as make_sessions_router
+app.include_router(make_sessions_router())
 
 # Forgiving spelling: weak matches get a second search with the spelling fixed.
 from spellfix import install as install_spellfix

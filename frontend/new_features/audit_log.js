@@ -29,6 +29,7 @@
     clear_all_documents: "Cleared all documents",
     password_changed: "Changed their password",
     password_change_failed: "Password change failed",
+    signed_out_everywhere: "Signed out everywhere",
     user_created: "Created an account",
     user_role_changed: "Changed a role",
     document_level_changed: "Changed who can see a document",

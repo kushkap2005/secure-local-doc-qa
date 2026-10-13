@@ -13,6 +13,7 @@ Events:
     upload_failed                  document uploads and why one was refused
     pdf_opened, pdf_denied_or_missing   someone opened a stored PDF, or was refused
     clear_all_documents            "Clear all documents" was used
+    signed_out_everywhere          a user ended all of their own sign-ins
     user_created, user_role_changed     account changes (Admin)
     document_level_changed         who may see a document was changed (Admin)
     access_denied                  any request refused with 403 (role too low)
@@ -189,6 +190,9 @@ def classify(method, path, status, req, resp, user, role):
             return user, role, "pdf_opened", m.group(1)[:12], ""
         if status == 404:
             return user, role, "pdf_denied_or_missing", m.group(1)[:12], ""
+
+    if method == "POST" and path == "/account/signout-all" and status == 200:
+        return user, role, "signed_out_everywhere", "", ""
 
     if method == "POST" and path == "/account/password":
         if status == 200:
