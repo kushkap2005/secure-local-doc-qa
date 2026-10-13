@@ -24,6 +24,9 @@
     .sp-bad  { background:#ef4444; box-shadow:0 0 6px rgba(239,68,68,.6); }
     .sp-warn { background:#f59e0b; }
     .sp-row[hidden] { display:none; }
+    .sp-file { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+               font-size:.78rem; font-weight:600; line-height:1.25; word-break:break-all; }
+    .sp-ago { display:block; margin-top:3px; font-size:.7rem; font-weight:400; opacity:.65; }
     .status-grid .status-row.sp-row dd { font-size:.95rem; font-weight:600; letter-spacing:0; min-width:0; word-break:break-word; text-align:left; }
   `;
 
@@ -101,9 +104,13 @@
     else light("embedding", "bad", "Not loaded", "The embedding model is not loaded in the server.");
 
     if (d.last_upload && d.last_upload.file) {
+      const dd = rows.upload.dd;
+      dd.textContent = "";
+      dd.className = "";
+      dd.title = d.last_upload.file; // hover shows the full name
+      dd.appendChild(h("span", "sp-file", d.last_upload.file));
       const when = ago(d.last_upload.time);
-      plain("upload", d.last_upload.file + (when ? " (" + when + ")" : ""), "The newest upload your role can see.");
-      rows.upload.dd.style.wordBreak = "break-word";
+      if (when) dd.appendChild(h("span", "sp-ago", when));
     } else {
       plain("upload", "none yet", "No upload your role can see has been recorded.");
     }

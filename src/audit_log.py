@@ -7,6 +7,8 @@ What it records (one row per event):
 
 Events:
     login, login_failed            sign-ins (a failed one records the username typed)
+    login_locked                   a username was locked after too many wrong passwords,
+                                   or a sign-in was refused while it was locked
     ask, ask_failed                a question was asked (the question TEXT is NOT
                                    stored unless LOG_QUESTION_TEXT is switched on)
     upload, upload_duplicate,
@@ -16,6 +18,8 @@ Events:
     signed_out_everywhere          a user ended all of their own sign-ins
     user_created, user_role_changed     account changes (Admin)
     document_level_changed         who may see a document was changed (Admin)
+    injection_suspected            a document passage contained instruction-like text
+                                   (written by prompt_guard.py: file and page, never the text)
     access_denied                  any request refused with 403 (role too low)
 
 Passwords, tokens, answers and document text are never written to the log.

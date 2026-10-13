@@ -19,6 +19,8 @@
   const LABELS = {
     login: "Signed in",
     login_failed: "Failed sign-in",
+    injection_suspected: "Suspicious instruction-like text in a document",
+    login_locked: "Sign-in locked (too many wrong passwords)",
     ask: "Asked a question",
     ask_failed: "Question failed",
     upload: "Uploaded a document",
@@ -36,7 +38,7 @@
     access_denied: "Request refused (not allowed)",
   };
   // the ones an Admin should notice
-  const WARN = new Set(["login_failed", "password_change_failed", "access_denied", "clear_all_documents", "pdf_denied_or_missing", "upload_failed", "ask_failed"]);
+  const WARN = new Set(["injection_suspected", "login_failed", "login_locked", "password_change_failed", "access_denied", "clear_all_documents", "pdf_denied_or_missing", "upload_failed", "ask_failed"]);
 
   const css = `
     .al-overlay { position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.55);
@@ -57,10 +59,11 @@
     .al th { text-align:left; font-weight:600; font-size:12px; opacity:.75; padding:8px 10px; position:sticky; top:0;
              background:var(--bg-panel, #11151f); border-bottom:1px solid var(--border, rgba(128,128,128,.3)); white-space:nowrap; }
     .al td { padding:7px 10px; border-top:1px solid var(--border, rgba(128,128,128,.18)); vertical-align:top; word-break:break-word; }
+    .al td.al-nowrap { white-space:nowrap; word-break:normal; }
     .al td.al-when { white-space:nowrap; font-variant-numeric:tabular-nums; opacity:.85; }
     .al-act-warn { color:#fbbf24; font-weight:600; }
     :root[data-theme="light"] .al-act-warn { color:#b45309; }
-    .al-badge { display:inline-block; padding:1px 8px; border-radius:999px; font-size:11px; font-weight:600; border:1px solid transparent; }
+    .al-badge { display:inline-block; white-space:nowrap; padding:1px 8px; border-radius:999px; font-size:11px; font-weight:600; border:1px solid transparent; }
     .al-badge-guest { color:#4ade80; background:rgba(34,197,94,.14);  border-color:rgba(34,197,94,.35); }
     .al-badge-staff { color:#93c5fd; background:rgba(59,130,246,.14); border-color:rgba(59,130,246,.35); }
     .al-badge-admin { color:#fbbf24; background:rgba(245,158,11,.16); border-color:rgba(245,158,11,.40); }
@@ -241,12 +244,12 @@
         tr.appendChild(c);
       };
       td(when(it.ts), "al-when");
-      td(it.username || "\u2014");
-      td(it.role ? h("span", "al-badge al-badge-" + it.role.toLowerCase(), it.role) : "\u2014");
+      td(it.username || "\u2014", "al-nowrap");
+      td(it.role ? h("span", "al-badge al-badge-" + it.role.toLowerCase(), it.role) : "\u2014", "al-nowrap");
       td(h("span", WARN.has(it.action) ? "al-act-warn" : "", LABELS[it.action] || it.action));
       td(it.target || "\u2014");
       td(it.detail || "\u2014");
-      td(h("span", it.status >= 400 ? "al-bad" : "", String(it.status)));
+      td(h("span", it.status >= 400 ? "al-bad" : "", String(it.status)), "al-nowrap");
       tbody.appendChild(tr);
     });
     table.append(thead, tbody);
