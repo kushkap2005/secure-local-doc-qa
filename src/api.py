@@ -79,6 +79,9 @@ store = VectorStore()
 from audit_log import install as install_audit_log
 from login_lockout import install as install_login_lockout
 install_login_lockout(app)
+from password_reset import make_router as make_reset_router
+app.include_router(make_reset_router())
+
 install_audit_log(app)
 
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB — matches the limit shown in the frontend

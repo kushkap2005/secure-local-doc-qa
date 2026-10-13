@@ -108,6 +108,21 @@ def note_success(key: str) -> None:
     _failures.pop(key, None)
 
 
+def unlock(key: str) -> None:
+    """Lift a lock and forget the failures (used after a successful password reset)."""
+    _failures.pop(key, None)
+    _locked_until.pop(key, None)
+
+
+def fail_and_log(key: str, username: str, ip: str, why: str) -> bool:
+    """Count one failed attempt that did not come through /login (for example a wrong
+    password-reset code). Writes the lock to the audit log if this one trips it."""
+    tripped = note_failure(key)
+    if tripped:
+        _audit(username[:100], f"locked for {LOCK_SECONDS // 60} min after {MAX_FAILURES} failures ({why})", 400, ip)
+    return tripped
+
+
 def reset_all() -> None:
     """For tests."""
     _failures.clear()
