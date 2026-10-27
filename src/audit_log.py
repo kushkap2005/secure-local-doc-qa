@@ -16,6 +16,10 @@ Events:
     pdf_opened, pdf_denied_or_missing   someone opened a stored PDF, or was refused
     clear_all_documents            "Clear all documents" was used
     signed_out_everywhere          a user ended all of their own sign-ins
+    password_reset_requested       someone pressed "Forgot password?" and asked an Admin for a code
+    reset_code_issued              an Admin made a one-time password reset code for a user
+    password_reset_used, password_reset_failed   a reset code was used / was refused
+    password_reset_script          reset_password.py was run on the server
     user_created, user_role_changed     account changes (Admin)
     document_level_changed         who may see a document was changed (Admin)
     injection_suspected            a document passage contained instruction-like text
@@ -126,11 +130,12 @@ def record(username, role, action, target="", detail="", status=0, ip="") -> Non
 
 _ROLE_PATH = re.compile(r"/admin/users/([^/]+)/role")
 _DOC_LEVEL_PATH = re.compile(r"/admin/documents/([0-9a-fA-F]{64})/role")
+_RESET_ISSUE_PATH = re.compile(r"/admin/users/([^/]+)/reset-code")
 _PDF_PATH = re.compile(r"/documents/([0-9a-fA-F]{64})/pdf")
 
 
 def _wants_request_body(method: str, path: str) -> bool:
-    if method == "POST" and path in ("/login", "/admin/users"):
+    if method == "POST" and path in ("/login", "/admin/users", "/password/reset"):
         return True
     if method == "PUT" and (_ROLE_PATH.fullmatch(path) or _DOC_LEVEL_PATH.fullmatch(path)):
         return True
@@ -194,6 +199,19 @@ def classify(method, path, status, req, resp, user, role):
             return user, role, "pdf_opened", m.group(1)[:12], ""
         if status == 404:
             return user, role, "pdf_denied_or_missing", m.group(1)[:12], ""
+
+    m = _RESET_ISSUE_PATH.fullmatch(path) if method == "POST" else None
+    if m and status == 200:
+        return user, role, "reset_code_issued", m.group(1), ""
+
+    if method == "POST" and path == "/password/reset":
+        who = _clip(req.get("username"), 100)  # the code and the new password are never read here
+        if status == 200:
+            return who, "", "password_reset_used", who, ""
+        if status in (400, 422):
+            return who, "", "password_reset_failed", "", "invalid or expired code, or new password refused"
+        if status == 429:
+            return who, "", "password_reset_failed", "", "refused while locked"
 
     if method == "POST" and path == "/account/signout-all" and status == 200:
         return user, role, "signed_out_everywhere", "", ""

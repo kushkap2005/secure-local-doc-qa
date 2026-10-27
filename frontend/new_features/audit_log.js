@@ -31,6 +31,11 @@
     clear_all_documents: "Cleared all documents",
     password_changed: "Changed their password",
     password_change_failed: "Password change failed",
+    password_reset_requested: "Asked for a password reset (Forgot password)",
+    reset_code_issued: "Issued a password reset code",
+    password_reset_used: "Reset a password with a code",
+    password_reset_failed: "Password reset failed",
+    password_reset_script: "Password reset by the server script",
     signed_out_everywhere: "Signed out everywhere",
     user_created: "Created an account",
     user_role_changed: "Changed a role",
@@ -38,7 +43,7 @@
     access_denied: "Request refused (not allowed)",
   };
   // the ones an Admin should notice
-  const WARN = new Set(["injection_suspected", "login_failed", "login_locked", "password_change_failed", "access_denied", "clear_all_documents", "pdf_denied_or_missing", "upload_failed", "ask_failed"]);
+  const WARN = new Set(["password_reset_requested", "password_reset_failed", "password_reset_script", "injection_suspected", "login_failed", "login_locked", "password_change_failed", "access_denied", "clear_all_documents", "pdf_denied_or_missing", "upload_failed", "ask_failed"]);
 
   const css = `
     .al-overlay { position:fixed; inset:0; z-index:60; background:rgba(0,0,0,.55);
@@ -282,4 +287,4 @@
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
   else start();
-})();
+})(); 
