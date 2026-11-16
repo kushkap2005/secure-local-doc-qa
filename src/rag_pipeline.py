@@ -20,7 +20,7 @@ from langchain_core.prompts import ChatPromptTemplate
 import prompt_guard
 from langchain_ollama import ChatOllama
 
-MODEL_NAME = "qwen2.5:1.5b-instruct"
+MODEL_NAME = "qwen2.5:7b-instruct"
 
 # Below this cosine-similarity score, the top retrieved chunk is treated as
 # unrelated to the question, so we skip the LLM call rather than risk it
