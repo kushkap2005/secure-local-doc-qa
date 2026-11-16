@@ -37,8 +37,6 @@ src/api_old.py
 src/fake.txt
 src/api_before_5d.py
 
-frontend/wifiviewer.py
-src/test.py
 
 # local scratch files and the old front page
 frontend/wifiviewer.py
