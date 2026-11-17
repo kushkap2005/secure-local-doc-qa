@@ -1,0 +1,66 @@
+id,category,question,reference_answer,source_file,source_pages,expected_behavior
+1,factual,What are the two stages of photosynthesis in plants?,Light reactions and the Calvin cycle.,9._Ch_7_Photosynthesis-1.pdf,7,answer
+2,factual,How many chloroplasts can a single cell have?,From 1 (in unicellular algae) up to about 100 (e.g. Arabidopsis and wheat).,9._Ch_7_Photosynthesis-1.pdf,5,answer
+3,factual,Which wavelengths do Photosystem II and Photosystem I absorb?,Photosystem II (P680) absorbs 680 nm light and Photosystem I (P700) absorbs 700 nm light.,9._Ch_7_Photosynthesis-1.pdf,16;21,answer
+4,reworded,"Where in the chloroplast does water get split, and what does the splitting?",Photolysis of water is carried out by the oxygen-evolving complex.,9._Ch_7_Photosynthesis-1.pdf,17,answer
+5,multi-page,Compare the products of non-cyclic and cyclic photophosphorylation.,"Non-cyclic gives O2, ATP and NADPH; cyclic gives only ATP.",9._Ch_7_Photosynthesis-1.pdf,21;22,answer
+6,reasoning,Why does the plant need cyclic photophosphorylation?,"The Calvin cycle needs 3 ATP and 2 NADPH per CO2, but non-cyclic gives 1 ATP and 1 NADPH per electron pair, so cyclic makes the extra ATP.",9._Ch_7_Photosynthesis-1.pdf,22,answer
+7,factual,"Which pigments make leaves turn yellow, red and brown in the fall?","Yellow/orange: xanthophyll, flavone, carotene. Red/purple: lycopene and anthocyanin. Brown: cell wall (dead leaf). Green is chlorophyll.",9._Ch_7_Photosynthesis-1.pdf,11,answer
+8,diagram,What are the parts of a photosystem's reaction center?,"A primary electron acceptor and a reaction-center chlorophyll a, surrounded by antenna pigment molecules.",9._Ch_7_Photosynthesis-1.pdf,14;15,answer
+9,diagram,What are the structural parts of the chlorophyll molecule?,"A porphyrin ring head (with Mg) that absorbs light, and a hydrocarbon tail.",9._Ch_7_Photosynthesis-1.pdf,13,answer
+10,factual,What are the three application architectures?,"Client-server, peer-to-peer (P2P), and a hybrid of client-server and P2P.",Lec-5-6-Application-Layer-PART-1.pdf,6,answer
+11,keyword,What are the port numbers for an HTTP server and an SMTP mail server?,HTTP uses port 80 and SMTP uses port 25.,Lec-5-6-Application-Layer-PART-1.pdf,12,answer
+12,factual,What services does TCP provide that UDP does not?,"TCP provides reliable transport, flow control, congestion control and is connection-oriented; UDP provides none of these.",Lec-5-6-Application-Layer-PART-1.pdf,16,answer
+13,calculation,What is the response time for fetching a file with non-persistent HTTP in terms of RTT?,2 RTT plus the file transmission time.,Lec-5-6-Application-Layer-PART-1.pdf,20,answer
+14,factual,What is the difference between non-persistent and persistent HTTP?,Non-persistent sends at most one object per TCP connection (HTTP/1.0); persistent sends multiple objects over one connection (HTTP/1.1 default).,Lec-5-6-Application-Layer-PART-1.pdf,21,answer
+15,keyword,"What do HTTP status codes 200, 301, 400, 404 and 505 mean?","200 OK, 301 Moved Permanently, 400 Bad Request, 404 Not Found, 505 HTTP Version Not Supported.",Lec-5-6-Application-Layer-PART-1.pdf,25,answer
+16,reworded,How does a cookie let a website remember a returning user?,"The server creates an ID, sends it in a Set-cookie header, the browser stores it and sends it back in the Cookie header on later requests, and the server looks it up in its backend database.",Lec-5-6-Application-Layer-PART-1.pdf,26,answer
+17,calculation,"With a cache hit rate of 0.4, what is the access link utilization and total delay in the proxy server example?","60% of requests use the access link, giving 0.9 Mbps, utilization 0.60, and total delay of about 1.2 seconds.",Lec-5-6-Application-Layer-PART-1.pdf,29,answer
+18,factual,What does a conditional GET do and what does the server reply if the copy is current?,The cache sends If-modified-since with its copy's date; if unchanged the server replies 304 Not Modified with no object.,Lec-5-6-Application-Layer-PART-1.pdf,30,answer
+19,factual,What are the four types of scheduling based on frequency of invocation?,"Long-term, medium-term, short-term, and I/O scheduling.",scheduling.pdf,4,answer
+20,calculation,"What is the average waiting time under FCFS for P1=24, P2=3, P3=3 arriving in order P1, P2, P3?","Waits are 0, 24, 27, so average is 17.",scheduling.pdf,17,answer
+21,reasoning,What is the convoy effect?,"Short processes get stuck behind a long process in FCFS, giving a poor average waiting time.",scheduling.pdf,19,answer
+22,calculation,"What is the average waiting time for preemptive SJF in the example with P1 (0,7), P2 (2,4), P3 (4,1), P4 (5,4)?",3 time units.,scheduling.pdf,23,answer
+23,keyword,How is the next CPU burst predicted with exponential averaging?,"tau(n+1) = alpha * t(n) + (1 - alpha) * tau(n), with 0 <= alpha <= 1.",scheduling.pdf,25,answer
+24,calculation,"With time quantum 20 in the Round Robin example, what is the average waiting time?",66 1/4 time units.,scheduling.pdf,30,answer
+25,keyword,How is the response ratio calculated in Highest Response Ratio Next?,(time spent waiting + expected service time) / expected service time.,scheduling.pdf,34,answer
+26,factual,What is the difference between a multilevel queue and a multilevel feedback queue?,In a multilevel queue processes are permanently assigned to one queue; in feedback queues processes can move between queues.,scheduling.pdf,38;39,answer
+27,keyword,What is the priority formula in traditional UNIX scheduling?,"p_usrpri = PUSER + (p_cpu / 4) + (2 * p_nice), with PUSER = 50.",scheduling.pdf,54,answer
+28,diagram,What is the relationship between the width of a box function and the zeros of its Fourier transform?,They are inversely related: a wider box gives zeros that are closer together.,IP_4.pdf,6,answer
+29,factual,What is aliasing?,"Aliasing occurs when the samples of two or more different functions coincide, so the functions look identical once digitized.",IP_4.pdf,11,answer
+30,factual,What are the three sampling conditions shown for a band-limited function?,"Over-sampling, critical sampling and under-sampling.",IP_4.pdf,8,answer
+31,factual,What two kinds of aliasing does the lecture name?,Spatial aliasing (undersampling) and temporal aliasing (the wagon wheel effect).,IP_4.pdf,19,answer
+32,reasoning,What causes the moire pattern in the newspaper image digitized at 75 dpi?,The interaction between the 45 degree orientation of the half-tone dots and the north-south orientation of the sampling elements.,IP_4.pdf,23,answer
+33,keyword,How do you center the Fourier transform of an image?,"Multiply f(x,y) by (-1)^(x+y) before computing the DFT; in 1-D multiply f(x) by (-1)^x.",IP_4.pdf,26,answer
+34,factual,What happens to the Fourier spectrum when a rectangle is translated?,The spectrum of the translated rectangle is identical to the spectrum of the original image.,IP_4.pdf,30,answer
+35,reasoning,Why is zero padding needed when filtering in the frequency domain?,"The DFT implies periodicity, so circular convolution gives erroneous results; zero padding remedies this.",IP_4.pdf,33;40,answer
+36,diagram,What are the steps of filtering an image in the frequency domain?,"Pad the image to PxQ, multiply by (-1)^(x+y), compute the DFT, multiply by the filter H, take the real part of the IDFT, multiply by (-1)^(x+y), then extract the first M rows and N columns.",IP_4.pdf,43,answer
+37,factual,What is a translation scheme?,"A context-free grammar in which attributes are associated with grammar symbols and semantic actions, enclosed in braces, are inserted within the right-hand sides of productions.",4._Translation_Schemes.pdf,2,answer
+38,reasoning,Why are translation schemes more implementation oriented than syntax directed definitions?,They indicate the order in which semantic rules and attributes are evaluated.,4._Translation_Schemes.pdf,2,answer
+39,factual,What is the translation scheme that maps infix to postfix?,E -> T R; R -> addop T {print(addop)} R | epsilon; T -> num {print(num)}; addop -> + | -.,4._Translation_Schemes.pdf,5,answer
+40,calculation,What postfix output does the infix-to-postfix scheme give for 9-5+2?,"9 5 - 2 +, obtained by a depth-first traversal.",4._Translation_Schemes.pdf,8,answer
+41,factual,"Where must an action computing an inherited attribute be placed, and where a synthesized attribute?",An inherited attribute must be computed in an action before the symbol on the RHS; a synthesized attribute is computed at the end of the RHS.,4._Translation_Schemes.pdf,10,answer
+42,factual,"What are translation schemes useful for, and how are semantic actions treated?",They evaluate L-attributed definitions at parsing time; semantic actions are treated as terminal symbols.,4._Translation_Schemes.pdf,9,answer
+43,factual,"In the EQN example, how is B2.pts set in B -> B1 sub B2?",B2.pts = shrink(B.pts).,4._Translation_Schemes.pdf,11;12,answer
+44,factual,How does the type declaration translation scheme pass the type to the identifier list?,"D -> T {L.in := T.type} L, and each id is recorded with addtype(id.entry, L.in).",4._Translation_Schemes.pdf,14,answer
+45,out-of-scope,Who won the 2018 FIFA World Cup?,,,,refuse
+46,out-of-scope,What is the capital of Australia?,,,,refuse
+47,near-miss,What is the role of the enzyme RuBisCO in the Calvin cycle?,,,,refuse
+48,near-miss,How does DNS resolve a hostname step by step?,,,,refuse
+49,near-miss,How does JPEG compression use the DCT?,,,,refuse
+50,near-miss,How do you build an LR(1) parsing table?,,,,refuse
+51,paraphrase,"Which carries more energy per photon, ultraviolet light or radio waves?","Ultraviolet; energy is highest for gamma rays and lowest for radio waves, so shorter wavelength means more energy.",9._Ch_7_Photosynthesis-1.pdf,9,answer
+52,paraphrase,How many ATP and NADPH does the plant burn through to turn a single CO2 into sugar?,3 ATP and 2 NADPH per CO2.,9._Ch_7_Photosynthesis-1.pdf,22,answer
+53,paraphrase,"Apart from land plants, what other kinds of living things make food using light?",Photosynthetic protists such as kelp (a large alga) and photosynthetic bacteria such as cyanobacteria.,9._Ch_7_Photosynthesis-1.pdf,2,answer
+54,paraphrase,"When two programs talk over the internet, which one starts the conversation and which one waits?",The client process initiates communication and the server process waits to be contacted.,Lec-5-6-Application-Layer-PART-1.pdf,10,answer
+55,paraphrase,"What is a web page actually made of, and how does a browser point to each piece?",A base HTML file plus referenced objects such as images; each object is addressable by a URL.,Lec-5-6-Application-Layer-PART-1.pdf,18,answer
+56,paraphrase,"Which HTTP request would you use to upload a file to a server, and which one asks for headers without the body?",PUT uploads a file in the entity body to the path in the URL; HEAD asks the server to leave the requested object out of the response.,Lec-5-6-Application-Layer-PART-1.pdf,24,answer
+57,paraphrase,What do we call the delay between stopping one process and getting the next one running?,Dispatch latency.,scheduling.pdf,13,answer
+58,paraphrase,"If the ready queue is split into interactive and batch jobs, which scheduling method does each queue use?",The foreground (interactive) queue uses round robin and the background (batch) queue uses FCFS.,scheduling.pdf,36,answer
+59,paraphrase,"On a multiprocessor with a separate queue per CPU, how does an idle CPU get work from a busy one?","Through pull migration, where an idle processor pulls a process from a busy processor; push migration moves processes from overloaded to idle processors.",scheduling.pdf,57,answer
+60,paraphrase,Why bother with the FFT instead of just applying big filters directly in the image?,The FFT has a computational advantage over spatial filtering with both nonseparable and separable kernels.,IP_4.pdf,4,answer
+61,paraphrase,How can a printer that only has black ink show shades of gray?,"By halftoning, printing grayscale with black and white dots.",IP_4.pdf,24,answer
+62,paraphrase,What does the picture look like if you rebuild an image using only its phase information?,The shape features are all there but the intensity information is missing.,IP_4.pdf,32,answer
+63,paraphrase,Which kind of attribute definitions can be converted into translation schemes and used while parsing?,L-attributed definitions.,4._Translation_Schemes.pdf,9,answer
+64,paraphrase,"In S -> A1 A2 {A1.in=1, A2.in=2} with A -> a {print(A.in)}, why does evaluation fail?","The inherited attribute is set after the symbol that uses it, so a depth-first traversal reads an undefined value.",4._Translation_Schemes.pdf,10,answer
+65,paraphrase,"In a translation scheme, where should the action that computes a synthesized attribute like T.val be put?","At the end of the right-hand side, e.g. T -> T1 * F {T.val := T1.val * F.val}.",4._Translation_Schemes.pdf,10,answer
