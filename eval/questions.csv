@@ -64,3 +64,15 @@ id,category,question,reference_answer,source_file,source_pages,expected_behavior
 63,paraphrase,Which kind of attribute definitions can be converted into translation schemes and used while parsing?,L-attributed definitions.,4._Translation_Schemes.pdf,9,answer
 64,paraphrase,"In S -> A1 A2 {A1.in=1, A2.in=2} with A -> a {print(A.in)}, why does evaluation fail?","The inherited attribute is set after the symbol that uses it, so a depth-first traversal reads an undefined value.",4._Translation_Schemes.pdf,10,answer
 65,paraphrase,"In a translation scheme, where should the action that computes a synthesized attribute like T.val be put?","At the end of the right-hand side, e.g. T -> T1 * F {T.val := T1.val * F.val}.",4._Translation_Schemes.pdf,10,answer
+66,near-miss,How does C4 photosynthesis differ from C3 photosynthesis?,,,,refuse
+67,near-miss,How is the IPv6 packet header structured?,,,,refuse
+68,near-miss,How does BGP exchange routes between autonomous systems?,,,,refuse
+69,near-miss,How does HTTP/2 multiplexing work?,,,,refuse
+70,near-miss,Explain the Banker's algorithm for deadlock avoidance.,,,,refuse
+71,near-miss,How does the Linux Completely Fair Scheduler work?,,,,refuse
+72,near-miss,How does histogram equalization improve image contrast?,,,,refuse
+73,near-miss,How does the Canny edge detector work?,,,,refuse
+74,near-miss,How does LALR parsing differ from SLR parsing?,,,,refuse
+75,near-miss,Generate three-address code for a while loop.,,,,refuse
+76,out-of-scope,What is the boiling point of water at sea level?,,,,refuse
+77,out-of-scope,Plan a three-day trip to Goa for me.,,,,refuse
