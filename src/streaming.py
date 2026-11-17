@@ -134,7 +134,9 @@ def make_router(store, shared_docs_id: str, visible_hashes) -> APIRouter:
                     }
                 )
                 return
-            yield _line({"type": "done", "answer": "".join(parts), "sources": sources})
+            answer = "".join(parts).strip()
+            refused = answer.lower().replace("’", "'").startswith("i couldn't find this")
+            yield _line({"type": "done", "answer": answer, "sources": [] if refused else sources})
 
         return _streaming(events())
 

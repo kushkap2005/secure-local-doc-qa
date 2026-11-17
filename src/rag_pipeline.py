@@ -117,7 +117,7 @@ def answer_question(
         return {"answer": "No documents have been ingested yet.", "sources": []}
 
     if max(c["relevance_score"] for c in retrieved) < COSINE_GATE and max(c["rerank_score"] for c in retrieved) < RERANK_GATE:
-            return {"answer": "I couldn't find this in the provided documents.", "sources": []}
+        return {"answer": "I couldn't find this in the provided documents.", "sources": []}
 
     retrieved = [c for i, c in enumerate(retrieved) if i == 0 or c["rerank_score"] >= RERANK_CHUNK_MIN]    #only keep those chunks who cleared the relevance score boundary 
     context = build_context(retrieved)
@@ -129,9 +129,10 @@ def answer_question(
     except Exception as e:
         raise RuntimeError(f"Local LLM is unreachable — is Ollama running? ({e})")
 
+    refused = answer.strip().lower().replace("’", "'").startswith("i couldn't find this")
     return {
         "answer": answer,
-        "sources": [
+        "sources": [] if refused else [
             {"file": c["source_file"], "page": c["page_number"], "relevance": round(c["relevance_score"], 3), "text": c["text"]}
             for c in retrieved
         ],
