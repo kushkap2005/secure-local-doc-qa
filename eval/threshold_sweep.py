@@ -51,7 +51,7 @@ def main():
 
     print(f"\n{len(ans)} answerable questions, {len(ref)} refusal questions\n")
 
-    print("=== 1. Gate on best COSINE score (current method; threshold now 0.43) ===")
+    print("=== 1. Gate on best COSINE score (old method; old threshold was 0.33) ===")
     print("cutoff | answerable wrongly refused | refusal questions wrongly answered")
     for t in [0.20, 0.25, 0.30, 0.35, 0.40, 0.43, 0.45, 0.50]:
         wrong_refused = sum(1 for r in ans if r[0] < t)
@@ -81,6 +81,21 @@ def main():
     print("\n=== Answerable questions that a RERANK gate of -3 would refuse ===")
     for cos, rr, qid, text in sorted(ans, key=lambda r: r[1]):
         if rr < -3:
+            print(f"  id {qid:>3}  cosine {cos:.2f}  rerank {rr:6.2f}  {text[:70]}")
+
+
+    print("\n=== 4. Combined rule: answer if cosine >= C OR rerank >= R ===")
+    
+    print("    C      R | answerable wrongly refused | refusals wrongly answered")
+    for c in [0.50, 0.55, 0.60, 0.65]:
+        for r in [-3, -2, -1, 0]:
+            wr = sum(1 for a in ans if a[0] < c and a[1] < r)
+            wa = sum(1 for x in ref if x[0] >= c or x[1] >= r)
+            print(f" {c:.2f} {r:5d} | {wr:3d} of {len(ans)} ({pct(wr, len(ans))}) | {wa} of {len(ref)}")
+
+    print("\n=== Refusal questions the CURRENT rule (cosine>=0.50 OR rerank>=-3) would answer ===")
+    for cos, rr, qid, text in ref:
+        if cos >= 0.50 or rr >= -3:
             print(f"  id {qid:>3}  cosine {cos:.2f}  rerank {rr:6.2f}  {text[:70]}")
 
 
