@@ -25,7 +25,16 @@ MODEL_NAME = "qwen2.5:7b-instruct"
 # Below this cosine-similarity score, the top retrieved chunk is treated as
 # unrelated to the question, so we skip the LLM call rather than risk it
 # answering from outside knowledge instead of the documents.
-RELEVANCE_THRESHOLD = 0.33
+
+# Answer only if the best chunk is close in meaning (cosine) OR the reranker
+# rates some chunk as a good match. Otherwise skip the LLM call rather than
+# risk it answering from outside knowledge.
+COSINE_GATE = 0.50
+RERANK_GATE = -3.0
+# A retrieved chunk is passed to the LLM only if the reranker scores it at
+# least this high; the top-ranked chunk is always kept.
+RERANK_CHUNK_MIN = -2.0
+RELEVANCE_THRESHOLD = COSINE_GATE   # kept so check-scores.py and the status panel keep working
 
 
 SYSTEM_PROMPT = """You are a document question-answering assistant.
@@ -107,12 +116,10 @@ def answer_question(
     if not retrieved:
         return {"answer": "No documents have been ingested yet.", "sources": []}
 
-    if retrieved[0]["relevance_score"] < RELEVANCE_THRESHOLD:
-        return {"answer": "I couldn't find this in the provided documents.", "sources": []}
+    if max(c["relevance_score"] for c in retrieved) < COSINE_GATE and max(c["rerank_score"] for c in retrieved) < RERANK_GATE:
+            return {"answer": "I couldn't find this in the provided documents.", "sources": []}
 
-    retrieved = [c for c in retrieved if c["relevance_score"] >= RELEVANCE_THRESHOLD] 
-    #only keep those chunks who cleared the relevance score boundary 
-
+    retrieved = [c for i, c in enumerate(retrieved) if i == 0 or c["rerank_score"] >= RERANK_CHUNK_MIN]    #only keep those chunks who cleared the relevance score boundary 
     context = build_context(retrieved)
 
     try:

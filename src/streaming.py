@@ -40,7 +40,7 @@ from pydantic import BaseModel, Field
 
 import rag_pipeline
 from auth import require_role
-from rag_pipeline import MODEL_NAME, RELEVANCE_THRESHOLD, build_context
+from rag_pipeline import MODEL_NAME, COSINE_GATE, RERANK_GATE, RERANK_CHUNK_MIN, build_context
 
 # Same wording rag_pipeline.py uses, so the page's refusal styling still matches.
 NO_DOCS_ANSWER = "No documents have been ingested yet."
@@ -90,10 +90,10 @@ def make_router(store, shared_docs_id: str, visible_hashes) -> APIRouter:
         # --- same refusal rules as rag_pipeline.answer_question ---------------
         if not retrieved:
             return _streaming(_single_answer(NO_DOCS_ANSWER))
-        if retrieved[0]["relevance_score"] < RELEVANCE_THRESHOLD:
+        if max(c["relevance_score"] for c in retrieved) < COSINE_GATE and max(c["rerank_score"] for c in retrieved) < RERANK_GATE:
             return _streaming(_single_answer(NOT_FOUND_ANSWER))
 
-        retrieved = [c for c in retrieved if c["relevance_score"] >= RELEVANCE_THRESHOLD]
+        retrieved = [c for i, c in enumerate(retrieved) if i == 0 or c["rerank_score"] >= RERANK_CHUNK_MIN]
         context = build_context(retrieved)
         sources = [
             {
