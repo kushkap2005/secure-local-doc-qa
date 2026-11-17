@@ -1,6 +1,7 @@
 """
 vector_store.py — Stores document chunks as embeddings in ChromaDB and searches
-them, through LangChain's Chroma vector store and a retriever.
+them with a hybrid retriever: semantic search + BM25 keyword search, merged by
+Reciprocal Rank Fusion and re-ordered by a cross-encoder.
 
 Every chunk carries a `user_id` in its metadata, and every read/write below
 is filtered to that caller's own chunks — this is what gives each account
@@ -11,9 +12,17 @@ no-login behavior working unchanged.
 
 On top of that, query() and count() accept `allowed_hashes` — the content
 hashes of the documents the caller's ROLE may see (see database.py). The
-filter is applied inside the ChromaDB search itself, so chunks from documents
-a role can't see are never retrieved, never reach the LLM, and can't leak into
-an answer or its source list.
+filter is applied BEFORE any searching: only the chunks the caller may see are
+fetched, and both the semantic and the keyword search run on that set alone.
+So chunks from documents a role can't see are never retrieved, never reach the
+LLM, and can't leak into an answer or its source list.
+
+Retrieval pipeline (chosen from the Phase 3 evaluation):
+  1. fetch the chunks this caller may see
+  2. semantic ranking  : cosine similarity (all-MiniLM-L6-v2 embeddings)
+  3. keyword ranking   : BM25 (rank_bm25)
+  4. merge             : Reciprocal Rank Fusion of the two rankings
+  5. rerank            : cross-encoder reads question + chunk together
 
 LangChain pieces used here:
   - HuggingFaceEmbeddings : the local all-MiniLM-L6-v2 model (text -> vector)
@@ -27,21 +36,48 @@ import os
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
+import re
 from typing import Any, List, Optional
 
 import chromadb
+import numpy as np
 from chromadb.config import Settings
 from langchain_chroma import Chroma
 from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 from langchain_huggingface import HuggingFaceEmbeddings
+from rank_bm25 import BM25Okapi
+from sentence_transformers import CrossEncoder
 
 from ingest import Chunk
 
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
+RERANK_MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 COLLECTION_NAME = "documents"
 PERSIST_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "chroma_db")
+
+CANDIDATES = 20   # how many chunks each search hands to the merge/rerank step
+RRF_K = 60        # standard smoothing constant for Reciprocal Rank Fusion
+
+
+def tokenize(text: str) -> List[str]:
+    """Lowercase words and numbers only — what the keyword search compares."""
+    return re.findall(r"[a-z0-9]+", text.lower())
+
+
+def rrf_fuse(rank_lists: List[List[int]], k: int = RRF_K) -> List[int]:
+    """
+    Merge several ranked lists by rank, not by score: each chunk earns
+    1/(k + position) from every list it appears in, and the totals decide the
+    order. (Cosine scores and BM25 scores sit on different scales, so they
+    can't simply be added.)
+    """
+    scores = {}
+    for ranks in rank_lists:
+        for pos, idx in enumerate(ranks):
+            scores[idx] = scores.get(idx, 0) + 1 / (k + pos + 1)
+    return sorted(scores, key=scores.get, reverse=True)
 
 
 def build_where(user_id: str, allowed_hashes: Optional[List[str]]) -> dict:
@@ -58,17 +94,22 @@ def build_where(user_id: str, allowed_hashes: Optional[List[str]]) -> dict:
 
 class RoleFilteredRetriever(BaseRetriever):
     """
-    A LangChain retriever: give it a question, get back the most relevant
-    Documents. It only ever looks at this owner's chunks, and — when
-    allowed_hashes is given — only at chunks of the documents that list names.
+    Hybrid retriever: give it a question, get back the most relevant Documents.
+    It only ever looks at this owner's chunks, and — when allowed_hashes is
+    given — only at chunks of the documents that list names.
     allowed_hashes=None means no role filtering; an empty list means "may see
     nothing", so nothing is returned.
 
-    Each returned Document carries `relevance_score` in its metadata
-    (1 - cosine distance), which the relevance cutoff in rag_pipeline.py uses.
+    Each returned Document carries, in its metadata:
+      relevance_score : cosine similarity between question and chunk
+                        (= 1 - cosine distance, the same meaning as before) —
+                        the relevance cutoff in rag_pipeline.py uses this.
+      rerank_score    : the cross-encoder's score, kept for analysis.
     """
 
     vectorstore: Any
+    embeddings: Any
+    reranker: Any
     user_id: str
     allowed_hashes: Optional[List[str]] = None
     k: int = 5
@@ -81,19 +122,44 @@ class RoleFilteredRetriever(BaseRetriever):
         if self.allowed_hashes is not None and len(self.allowed_hashes) == 0:
             return []
 
+        # 1. Only the chunks this caller may see (user + role filter) —
+        #    text, metadata and stored embedding for each.
         where = build_where(self.user_id, self.allowed_hashes)
-        available = len(self.vectorstore.get(where=where, include=[])["ids"])
-        if available == 0:
-            return []
-
-        # never ask ChromaDB for more results than exist
-        results = self.vectorstore.similarity_search_with_score(
-            query, k=min(self.k, available), filter=where
+        data = self.vectorstore.get(
+            where=where, include=["documents", "metadatas", "embeddings"]
         )
+        texts = data["documents"]
+        if not texts:
+            return []
+        metas = data["metadatas"]
+        matrix = np.asarray(data["embeddings"], dtype=float)
+        n = min(CANDIDATES, len(texts))  # never ask for more than exist
+
+        # 2. Semantic ranking: cosine similarity of the question to every chunk.
+        q = np.asarray(self.embeddings.embed_query(query), dtype=float)
+        cosine = matrix @ q / (np.linalg.norm(matrix, axis=1) * np.linalg.norm(q) + 1e-12)
+        semantic_rank = list(np.argsort(-cosine)[:n])
+
+        # 3. Keyword ranking: BM25 over the same chunks.
+        bm25 = BM25Okapi([tokenize(t) or ["_empty_"] for t in texts])
+        keyword_scores = bm25.get_scores(tokenize(query))
+        keyword_rank = list(np.argsort(-keyword_scores)[:n])
+
+        # 4. Merge the two rankings by rank (RRF), keep the shortlist.
+        fused = rrf_fuse([semantic_rank, keyword_rank])[:n]
+
+        # 5. Rerank the shortlist: the cross-encoder reads question + chunk
+        #    together; the best `k` are returned.
+        rerank_scores = self.reranker.predict([(query, texts[i]) for i in fused])
+        order = sorted(range(len(fused)), key=lambda j: rerank_scores[j], reverse=True)[: self.k]
+
         documents = []
-        for doc, distance in results:
-            doc.metadata["relevance_score"] = 1 - distance  # closer distance = more relevant
-            documents.append(doc)
+        for j in order:
+            i = fused[j]
+            meta = dict(metas[i])
+            meta["relevance_score"] = float(cosine[i])
+            meta["rerank_score"] = float(rerank_scores[j])
+            documents.append(Document(page_content=texts[i], metadata=meta))
         return documents
 
 
@@ -101,6 +167,11 @@ class VectorStore:
     def __init__(self, persist_dir: str = PERSIST_DIR):
         # The local embedding model — the "meaning fingerprint maker". Loaded once.
         self.embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL_NAME)
+
+        # The local reranking model — reads question + chunk together and
+        # scores how well they match. Loaded once (must be in the local
+        # Hugging Face cache, since this project runs offline).
+        self.reranker = CrossEncoder(RERANK_MODEL_NAME)
 
         # ChromaDB saves everything to a local folder on disk — no server, no network
         # (anonymized telemetry is switched off: this project is air-gapped).
@@ -171,8 +242,9 @@ class VectorStore:
         allowed_hashes: Optional[List[str]] = None,
     ) -> List[dict]:
         """
-        Ask the retriever for the top_k chunks — scoped to this user's own
-        documents — that are closest in meaning to the question.
+        Ask the hybrid retriever for the top_k chunks — scoped to this user's
+        own documents — that best answer the question (semantic + keyword
+        search, merged and reranked).
 
         allowed_hashes restricts the search to those documents only (this is
         how a caller's role is enforced). None = no restriction; an empty list
@@ -180,6 +252,8 @@ class VectorStore:
         """
         retriever = RoleFilteredRetriever(
             vectorstore=self.vectorstore,
+            embeddings=self.embeddings,
+            reranker=self.reranker,
             user_id=user_id,
             allowed_hashes=allowed_hashes,
             k=top_k,
@@ -197,6 +271,7 @@ class VectorStore:
                 "source_file": doc.metadata["source_file"],
                 "page_number": doc.metadata["page_number"],
                 "relevance_score": doc.metadata["relevance_score"],
+                "rerank_score": doc.metadata["rerank_score"],
             })
         return retrieved
 
@@ -286,9 +361,16 @@ if __name__ == "__main__":
     check("list_documents reports file name and chunk count", listing["hash_admin"]["source_file"] == "admin.pdf" and listing["hash_admin"]["chunks"] == 1)
     check("another owner id sees nothing", store.count("someone_else") == 0 and store.list_documents("someone_else") == [])
 
-    retriever = RoleFilteredRetriever(vectorstore=store.vectorstore, user_id=OWNER, allowed_hashes=["hash_open"], k=5)
+    retriever = RoleFilteredRetriever(
+        vectorstore=store.vectorstore, embeddings=store.embeddings, reranker=store.reranker,
+        user_id=OWNER, allowed_hashes=["hash_open"], k=5,
+    )
     found = retriever.invoke(question)
     check("the retriever returns LangChain Documents with a relevance score", bool(found) and isinstance(found[0], Document) and "relevance_score" in found[0].metadata)
+    check("the retriever also reports a rerank score", bool(found) and "rerank_score" in found[0].metadata)
+
+    keyword_hit = store.query("thirty days", OWNER, top_k=1)
+    check("a keyword-style question finds the staff document", bool(keyword_hit) and keyword_hit[0]["source_file"] == "staff.pdf")
 
     store.reset(OWNER)
     check("reset clears the owner's chunks", store.count(OWNER) == 0)
