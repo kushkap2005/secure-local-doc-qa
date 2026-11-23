@@ -59,6 +59,7 @@ PERSIST_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "chroma_db")
 
 CANDIDATES = 20   # how many chunks each search hands to the merge/rerank step
 RRF_K = 60        # standard smoothing constant for Reciprocal Rank Fusion
+MIN_CHUNK_CHARS = 30   # ignore chunks shorter than this (slide titles, stray headings)
 
 
 def tokenize(text: str) -> List[str]:
@@ -128,11 +129,14 @@ class RoleFilteredRetriever(BaseRetriever):
         data = self.vectorstore.get(
             where=where, include=["documents", "metadatas", "embeddings"]
         )
-        texts = data["documents"]
-        if not texts:
+        # Drop tiny chunks (title-only slides) before any ranking.
+        keep = [i for i, t in enumerate(data["documents"]) if len(t.strip()) >= MIN_CHUNK_CHARS]
+        if not keep:
             return []
-        metas = data["metadatas"]
-        matrix = np.asarray(data["embeddings"], dtype=float)
+        texts = [data["documents"][i] for i in keep]
+        metas = [data["metadatas"][i] for i in keep]
+        matrix = np.asarray(data["embeddings"], dtype=float)[keep]
+        
         n = min(CANDIDATES, len(texts))  # never ask for more than exist
 
         # 2. Semantic ranking: cosine similarity of the question to every chunk.
