@@ -29,8 +29,8 @@ MODEL_NAME = "qwen2.5:7b-instruct"
 # Answer only if the best chunk is close in meaning (cosine) OR the reranker
 # rates some chunk as a good match. Otherwise skip the LLM call rather than
 # risk it answering from outside knowledge.
-COSINE_GATE = 0.50
-RERANK_GATE = -3.0
+COSINE_GATE = 0.55
+RERANK_GATE = -2.0
 # A retrieved chunk is passed to the LLM only if the reranker scores it at
 # least this high; the top-ranked chunk is always kept.
 RERANK_CHUNK_MIN = -2.0
