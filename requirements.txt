@@ -136,3 +136,4 @@ yarl==1.24.5
 zstandard==0.25.0
 rank_bm25
 ragas==0.4.4
+pytesseract==0.3.13
