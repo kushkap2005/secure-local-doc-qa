@@ -33,7 +33,7 @@ httpcore2==2.13.1
 httptools==0.8.0
 httpx==0.28.1
 httpx2==2.13.1
-huggingface_hub==1.26.0
+huggingface_hub==1.33.0
 idna==3.18
 importlib_resources==7.1.0
 itsdangerous==2.2.0
@@ -135,3 +135,4 @@ xxhash==4.0.1
 yarl==1.24.5
 zstandard==0.25.0
 rank_bm25
+ragas==0.4.4
