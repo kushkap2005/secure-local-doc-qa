@@ -54,12 +54,14 @@ OCR_ZOOM = 2.0           # render scale for OCR (2.0 ~ 144 dpi)
 VISION_ZOOM = 1.5        # smaller image is faster for the vision model
 
 VISION_PROMPT = (
-    "This is one page from a lecture document. Describe it so that someone who "
-    "cannot see it could answer questions about it. Write plain sentences, not a "
-    "bullet list. Name every labelled part, say what each part is or does, and "
-    "say how the parts connect or relate (arrows, order, inside/outside). Copy "
-    "any visible text, numbers and equations exactly. Do not add facts that are "
-    "not visible on the page. If something is unreadable, say so."
+    "This is one page from a lecture document. Describe only what is visibly on "
+    "the page, so that someone who cannot see it could answer questions about "
+    "it. Write plain sentences, not a bullet list. Name every labelled part and "
+    "say how the labelled parts are arranged or connected (arrows, order, "
+    "inside/outside). Copy any visible text, numbers and equations exactly. Do "
+    "not explain what things do or mean unless the page itself says so in "
+    "words, and do not add facts from your own knowledge. If something is "
+    "unreadable, say so."
 )
 # Bump this text if the prompt or logic changes, so old cache entries are ignored.
 CACHE_SETTINGS = f"v1|{VISION_MODEL}|{hashlib.md5(VISION_PROMPT.encode()).hexdigest()[:8]}"
