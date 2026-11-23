@@ -4,6 +4,7 @@ chunks ready for embedding.
 """
 
 import fitz  # PyMuPDF
+from page_reader import PageEnricher
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
@@ -24,7 +25,7 @@ class PasswordRequiredError(Exception):
     pass
 
 
-def extract_pages(pdf_path: str, password: Optional[str] = None) -> List[tuple[int, str]]:
+def extract_pages(pdf_path: str, password: Optional[str] = None, enrich: bool = True) -> List[tuple[int, str]]:
     try:
         doc = fitz.open(pdf_path)
     except Exception as e:
@@ -38,9 +39,12 @@ def extract_pages(pdf_path: str, password: Optional[str] = None) -> List[tuple[i
             doc.close()
             raise ValueError(f"Incorrect password for '{pdf_path}'.")
 
+    enricher = PageEnricher(pdf_path) if enrich else None
     pages = []
     for i, page in enumerate(doc):
         text = page.get_text("text")
+        if enricher:
+            text = enricher.enrich(page, text)
         pages.append((i + 1, text))
     doc.close()
     return pages
