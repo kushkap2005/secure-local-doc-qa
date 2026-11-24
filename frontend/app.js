@@ -16,7 +16,7 @@ const STRINGS = {
   statusOnline: "reachable",
   statusOffline: "unreachable",
 
-  uploadOnlyPdf: "Only PDF files are supported.",
+  uploadOnlyPdf: "Unsupported file type. Use PDF, Word, Excel, PowerPoint, HTML, CSV, TXT or MD.",
   uploadTooLarge: (mb) => `Too large — limit is ${mb} MB.`,
   uploadDuplicate: "Already indexed — this exact file is in the store.",
   uploadPasswordProtected: "Password-protected PDF, cannot read.",
@@ -429,7 +429,10 @@ async function loadDocuments() {
  * Upload
  * ---------------------------------------------------------------------- */
 function validateFile(file) {
-  if (!file.name.toLowerCase().endsWith(".pdf")) {
+  // Same list as the server (SUPPORTED_EXTENSIONS in doc_loaders.py).
+  const SUPPORTED_UPLOAD_EXTENSIONS = [".pdf", ".txt", ".md", ".csv", ".html", ".htm", ".docx", ".xlsx", ".xls", ".pptx"];
+  const ext = (file.name.toLowerCase().match(/\.[^.]+$/) || [""])[0];
+  if (!SUPPORTED_UPLOAD_EXTENSIONS.includes(ext)) {
     return STRINGS.uploadOnlyPdf;
   }
   if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
