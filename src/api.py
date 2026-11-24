@@ -30,6 +30,9 @@ import tempfile
 from typing import Optional
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
+import logging
+import threading
+from starlette.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -155,7 +158,7 @@ class LoginRequest(BaseModel):
 
 
 class AskRequest(BaseModel):
-    question: str = Field(..., min_length=1)
+    question: str = Field(..., min_length=1, max_length=2000)
     top_k: int = Field(default=5, ge=1, le=20)
 
 
@@ -230,6 +233,76 @@ def list_documents(current_user: dict = Depends(require_role("Guest"))):
     ]
 
 
+log = logging.getLogger("rag.api")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
+# Only one PDF is indexed at a time. OCR and the vision model are heavy, and two
+# identical uploads arriving together would otherwise both pass the duplicate check.
+INGEST_LOCK = threading.Lock()
+
+
+def _rollback_chunks(file_hash: str) -> None:
+    """Remove any chunks of this document that were written before a failure."""
+    try:
+        store.vectorstore.delete(
+            where={"$and": [{"user_id": SHARED_DOCS_ID}, {"file_hash": file_hash}]}
+        )
+    except Exception:
+        log.exception("Rollback failed for document %s", file_hash[:12])
+
+
+def _process_upload(tmp_path: str, file_hash: str, filename: str, min_role: str) -> int:
+    """Index one uploaded PDF and return how many chunks were added.
+
+    Runs in a worker thread (see upload()), so slow OCR / vision work does not
+    freeze the server for everyone else. Raises HTTPException with a clear message
+    on every failure the caller can understand.
+    """
+    with INGEST_LOCK:
+        if store.has_file(file_hash, SHARED_DOCS_ID):
+            raise HTTPException(
+                status_code=409,
+                detail=f"'{filename}' has already been uploaded.",
+            )
+
+        try:
+            chunks = ingest_pdf(tmp_path)
+        except PasswordRequiredError:
+            raise HTTPException(
+                status_code=423,
+                detail=f"'{filename}' is password-protected.",
+            )
+        except ValueError as e:
+            # corrupted PDF, or no extractable text. The library message contains our
+            # temp-file path, so swap it for the uploader's own file name.
+            raise HTTPException(status_code=400, detail=str(e).replace(tmp_path, filename))
+        except Exception:
+            log.exception("Ingest failed for '%s'", filename)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Couldn't process '{filename}'. The details are in the server log.",
+            )
+
+        for c in chunks:
+            c.source_file = filename
+        try:
+            store.add_chunks(chunks, file_hash=file_hash, user_id=SHARED_DOCS_ID)
+            # Recorded AFTER the chunks are stored. If the process dies in between,
+            # the document has no level and stays Admin-only (default deny), not public.
+            set_document_permission(file_hash, min_role)
+            save_pdf(tmp_path, file_hash)  # keep the original so the PDF viewer can open it
+        except Exception:
+            # Undo the partial write so the same file can be uploaded again,
+            # instead of being stuck as "already uploaded" with no content.
+            log.exception("Saving '%s' failed; rolling back", filename)
+            _rollback_chunks(file_hash)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Couldn't save '{filename}'. Nothing was stored; please try again.",
+            )
+        return len(chunks)
+
+
 @app.post("/upload")
 async def upload(
     file: UploadFile = File(...),
@@ -254,6 +327,9 @@ async def upload(
                 piece = await file.read(UPLOAD_CHUNK_SIZE)
                 if not piece:
                     break
+                if total_bytes == 0 and b"%PDF-" not in piece[:1024]:
+                    # A renamed .txt / .png etc. Reject before doing any work on it.
+                    raise HTTPException(status_code=400, detail="This file isn't a valid PDF.")
                 total_bytes += len(piece)
                 if total_bytes > MAX_FILE_SIZE:
                     raise HTTPException(
@@ -263,38 +339,20 @@ async def upload(
                 hasher.update(piece)
                 tmp.write(piece)
 
+        if total_bytes == 0:
+            raise HTTPException(status_code=400, detail="The uploaded file is empty.")
         file_hash = hasher.hexdigest()
-        if store.has_file(file_hash, SHARED_DOCS_ID):
-            raise HTTPException(
-                status_code=409,
-                detail=f"'{file.filename}' has already been uploaded.",
-            )
 
-        try:
-            chunks = ingest_pdf(tmp_path)
-        except PasswordRequiredError:
-            raise HTTPException(
-                status_code=423,
-                detail=f"'{file.filename}' is password-protected.",
-            )
-        except ValueError as e:
-            # corrupted PDF, or no extractable text
-            raise HTTPException(status_code=400, detail=str(e))
-
-        for c in chunks:
-            c.source_file = file.filename
-        store.add_chunks(chunks, file_hash=file_hash, user_id=SHARED_DOCS_ID)
-        # Recorded AFTER the chunks are stored. If anything fails in between, the
-        # document has no level and stays Admin-only (default deny), not public.
-        set_document_permission(file_hash, min_role)
-        save_pdf(tmp_path, file_hash)  # keep the original so the PDF viewer can open it
+        chunks_added = await run_in_threadpool(
+            _process_upload, tmp_path, file_hash, file.filename, min_role
+        )
     finally:
         if tmp_path:
             os.unlink(tmp_path)
 
     return {
         "filename": file.filename,
-        "chunks_added": len(chunks),
+        "chunks_added": chunks_added,
         "min_role": min_role,
         "chunks_indexed": store.count(SHARED_DOCS_ID, visible_hashes(current_user["role"])),
     }
@@ -305,6 +363,8 @@ def ask(
     request: AskRequest,
     current_user: dict = Depends(require_role("Guest")),
 ):
+    if not request.question.strip():
+        raise HTTPException(status_code=400, detail="Please type a question.")
     allowed = visible_hashes(current_user["role"])
     if store.count(SHARED_DOCS_ID, allowed) == 0:
         # Same message whether no documents exist or only restricted ones do,
@@ -315,8 +375,17 @@ def ask(
         return answer_question(
             request.question, store, user_id=SHARED_DOCS_ID, top_k=request.top_k, allowed_hashes=allowed
         )
-    except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Couldn't reach the local LLM: {e}")
+    except RuntimeError as e:
+        # rag_pipeline raises RuntimeError for "Ollama is down" / "model not pulled".
+        log.warning("Local LLM unavailable: %s", e)
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception:
+        # Anything else is a bug, not an LLM outage. Log it, don't leak internals.
+        log.exception("Unexpected error while answering")
+        raise HTTPException(
+            status_code=500,
+            detail="Something went wrong while answering. The details are in the server log.",
+        )
 
 
 # NOTE: the old POST /reset route (added only so the browser's page-unload
