@@ -181,7 +181,7 @@
     if (res.status === 404) {
       return {
         error:
-          "The PDF itself isn't stored for this document (it was uploaded before the viewer existed, or you can't see it). An Admin can clear and re-upload it to enable viewing.",
+          "No page preview is available for this document. Word, Excel, PowerPoint, HTML, CSV, TXT and MD files are not stored as originals, so only their extracted text is shown in the source cards. For a PDF uploaded before the viewer existed, an Admin can clear and re-upload it to enable viewing.",
       };
     }
     if (!res.ok) return { error: `Couldn't load the PDF (error ${res.status}).` };
