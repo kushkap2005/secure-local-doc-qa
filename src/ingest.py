@@ -5,6 +5,7 @@ chunks ready for embedding.
 
 import fitz  # PyMuPDF
 from page_reader import PageEnricher
+from doc_loaders import SUPPORTED_EXTENSIONS, load_pages
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional
@@ -105,6 +106,11 @@ def ingest_pdf(pdf_path, chunk_size: int = 800, overlap: int = 150, password: Op
             f"No extractable text found in '{filename}' — it may be a scanned PDF with no text layer."
         )
 
+    return _pages_to_chunks(pages, filename, chunk_size, overlap)
+
+
+def _pages_to_chunks(pages, filename: str, chunk_size: int = 800, overlap: int = 150) -> List[Chunk]:
+    """Turn [(page_number, text), ...] into overlapping chunks (same logic for every file type)."""
     all_chunks = []
     previous_page_tail = ""
 
@@ -139,6 +145,20 @@ def ingest_pdf(pdf_path, chunk_size: int = 800, overlap: int = 150, password: Op
             previous_page_tail = tail
 
     return all_chunks
+
+
+def ingest_file(path, chunk_size: int = 800, overlap: int = 150, password: Optional[str] = None) -> List[Chunk]:
+    """Index one document of any supported type (.pdf .txt .md .csv .html .docx .xlsx .xls .pptx)."""
+    ext = Path(path).suffix.lower()
+    if ext == ".pdf":
+        return ingest_pdf(path, chunk_size, overlap, password)
+    if ext not in SUPPORTED_EXTENSIONS:
+        raise ValueError(f"Unsupported file type '{ext}'.")
+    filename = Path(path).name
+    pages = [(n, text) for n, text in load_pages(path) if text.strip()]  # skip blank pages/slides
+    if not pages:
+        raise ValueError(f"No extractable text found in '{filename}'.")
+    return _pages_to_chunks(pages, filename, chunk_size, overlap)
 
 
 def ingest_directory(directory: str, chunk_size: int = 800, overlap: int = 150) -> List[Chunk]:

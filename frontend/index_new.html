@@ -115,14 +115,14 @@
             </select>
           </div>
 
-          <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload PDF files: click or drop files here">
-            <input type="file" id="file-input" accept="application/pdf,.pdf" multiple hidden />
+          <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Upload documents: click or drop files here">
+            <input type="file" id="file-input" accept=".pdf,.txt,.md,.csv,.html,.htm,.docx,.xlsx,.xls,.pptx" multiple hidden />
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" aria-hidden="true" class="dropzone-icon">
               <path d="M12 15.5V4M12 4 7.5 8.5M12 4l4.5 4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
               <path d="M4.5 15.5v3a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
             </svg>
-            <p class="dropzone-title">Drop PDF files or click to browse</p>
-            <p class="dropzone-sub">PDF only · up to <span id="max-size">100</span> MB per file</p>
+            <p class="dropzone-title">Drop files or click to browse</p>
+            <p class="dropzone-sub">PDF, Word, Excel, PowerPoint, HTML, CSV, TXT, MD · up to <span id="max-size">100</span> MB per file</p>
           </div>
 
           <p class="field-note" id="upload-role-note" hidden></p>
@@ -215,7 +215,7 @@
               <path d="M8 8h6M8 11.5h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
             </svg>
             <p class="empty-title">Ask something about your documents</p>
-            <p class="empty-sub">Upload a PDF on the left, then ask a question grounded in its contents.</p>
+            <p class="empty-sub">Upload a document on the left, then ask a question grounded in its contents.</p>
             <p class="empty-hint" id="example-prompts-label">Question formats worth trying:</p>
             <div class="example-prompts" id="example-prompts"></div>
             <p class="empty-caveat">Answers are strictly grounded in what's indexed — if nothing in your document is a close enough match, the assistant says so instead of guessing.</p>

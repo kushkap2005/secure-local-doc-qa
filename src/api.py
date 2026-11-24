@@ -55,7 +55,8 @@ from database import (
     set_document_permission,
     update_user_role,
 )
-from ingest import ingest_pdf
+from ingest import ingest_file, ingest_pdf
+from doc_loaders import SUPPORTED_EXTENSIONS, check_signature
 
 try:
     from ingest import PasswordRequiredError
@@ -266,7 +267,7 @@ def _process_upload(tmp_path: str, file_hash: str, filename: str, min_role: str)
             )
 
         try:
-            chunks = ingest_pdf(tmp_path)
+            chunks = ingest_file(tmp_path)
         except PasswordRequiredError:
             raise HTTPException(
                 status_code=423,
@@ -275,7 +276,7 @@ def _process_upload(tmp_path: str, file_hash: str, filename: str, min_role: str)
         except ValueError as e:
             # corrupted PDF, or no extractable text. The library message contains our
             # temp-file path, so swap it for the uploader's own file name.
-            raise HTTPException(status_code=400, detail=str(e).replace(tmp_path, filename))
+            raise HTTPException(status_code=400, detail=str(e).replace(tmp_path, filename).replace(os.path.basename(tmp_path), filename))
         except Exception:
             log.exception("Ingest failed for '%s'", filename)
             raise HTTPException(
@@ -290,7 +291,8 @@ def _process_upload(tmp_path: str, file_hash: str, filename: str, min_role: str)
             # Recorded AFTER the chunks are stored. If the process dies in between,
             # the document has no level and stays Admin-only (default deny), not public.
             set_document_permission(file_hash, min_role)
-            save_pdf(tmp_path, file_hash)  # keep the original so the PDF viewer can open it
+            if tmp_path.lower().endswith(".pdf"):
+                save_pdf(tmp_path, file_hash)  # keep the original so the PDF viewer can open it
         except Exception:
             # Undo the partial write so the same file can be uploaded again,
             # instead of being stuck as "already uploaded" with no content.
@@ -309,8 +311,12 @@ async def upload(
     min_role: str = Form("Staff"),
     current_user: dict = Depends(require_role("Staff")),
 ):
-    if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in SUPPORTED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported file type. Supported types: " + ", ".join(sorted(SUPPORTED_EXTENSIONS)) + ".",
+        )
     if min_role not in ROLE_HIERARCHY:
         raise HTTPException(status_code=400, detail=f"Level must be one of {ROLE_HIERARCHY}.")
     if ROLE_HIERARCHY.index(min_role) > ROLE_HIERARCHY.index(current_user["role"]):
@@ -321,15 +327,17 @@ async def upload(
     hasher = hashlib.sha256()
     try:
         total_bytes = 0
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
             tmp_path = tmp.name
             while True:
                 piece = await file.read(UPLOAD_CHUNK_SIZE)
                 if not piece:
                     break
-                if total_bytes == 0 and b"%PDF-" not in piece[:1024]:
-                    # A renamed .txt / .png etc. Reject before doing any work on it.
-                    raise HTTPException(status_code=400, detail="This file isn't a valid PDF.")
+                if total_bytes == 0:
+                    # A renamed .png etc. Reject before doing any work on it.
+                    problem = check_signature(piece[:1024], ext)
+                    if problem:
+                        raise HTTPException(status_code=400, detail=problem)
                 total_bytes += len(piece)
                 if total_bytes > MAX_FILE_SIZE:
                     raise HTTPException(
