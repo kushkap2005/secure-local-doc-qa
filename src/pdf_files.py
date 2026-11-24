@@ -32,16 +32,19 @@ To remove: undo those edits and delete this file. The viewer then simply says
 the PDF isn't available.
 """
 
+import logging
 import os
 import re
-import shutil
 
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 
 from auth import require_role
+from crypto_store import EncryptionError, decrypt_bytes, decrypt_text, encrypt_bytes
+
+log = logging.getLogger("rag.pdf")
 
 PDF_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "pdfs")
 _HASH = re.compile(r"[0-9a-f]{64}")
@@ -49,6 +52,14 @@ _HASH = re.compile(r"[0-9a-f]{64}")
 
 def _path_for(file_hash: str) -> str:
     return os.path.join(PDF_DIR, f"{file_hash}.pdf")
+
+
+def read_pdf(file_hash: str) -> bytes:
+    """The stored PDF's bytes, decrypted when encryption is on. The document's
+    hash is bound into the encryption, so a stored file copied under another
+    document's name will not decrypt."""
+    with open(_path_for(file_hash), "rb") as f:
+        return decrypt_bytes(f.read(), context=file_hash.encode())
 
 
 def save_pdf(source_path: str, file_hash: str) -> None:
@@ -60,10 +71,13 @@ def save_pdf(source_path: str, file_hash: str) -> None:
         os.makedirs(PDF_DIR, exist_ok=True)
         target = _path_for(file_hash)
         partial = target + ".part"
-        shutil.copyfile(source_path, partial)
+        with open(source_path, "rb") as f:
+            data = f.read()
+        with open(partial, "wb") as f:
+            f.write(encrypt_bytes(data, context=file_hash.encode()))  # no-op when encryption is off
         os.replace(partial, target)  # a half-copied file is never served
-    except OSError:
-        pass
+    except (OSError, EncryptionError):
+        log.exception("Could not store the PDF copy for %s", file_hash[:12])
 
 
 def delete_all_pdfs() -> None:
@@ -98,8 +112,13 @@ def make_router(visible_hashes, store=None, shared_docs_id: str = "shared") -> A
         path = _path_for(file_hash)
         if not os.path.isfile(path):
             raise not_found  # e.g. uploaded before this feature existed
-        return FileResponse(
-            path,
+        try:
+            data = read_pdf(file_hash)
+        except (OSError, EncryptionError):
+            log.exception("Could not read the stored PDF %s", file_hash[:12])
+            raise HTTPException(status_code=500, detail="The stored PDF could not be opened.")
+        return Response(
+            content=data,
             media_type="application/pdf",
             headers={"Cache-Control": "private, no-store", "Content-Disposition": "inline"},
         )
@@ -128,7 +147,8 @@ def make_router(visible_hashes, store=None, shared_docs_id: str = "shared") -> A
             }
             found = store.vectorstore.get(where=page_where, include=["documents"])
             pairs = sorted(zip(found.get("ids", []), found.get("documents", [])), key=lambda p: _chunk_order(p[0]))
-            chunks = [text for _id, text in pairs if text]
+            # stored chunk text may be encrypted; each chunk is bound to this document and page
+            chunks = [decrypt_text(text, context=f"{file_hash}:{page}") for _id, text in pairs if text]
             if not chunks:
                 raise not_found
             result = {"page": page, "chunks": chunks}
@@ -140,7 +160,11 @@ def make_router(visible_hashes, store=None, shared_docs_id: str = "shared") -> A
                     scored = store.vectorstore.similarity_search_with_score(
                         q.strip(), k=min(2, len(chunks)), filter=page_where
                     )
-                    best = [(1 - dist, doc.page_content) for doc, dist in scored if doc.page_content]
+                    best = [
+                        (1 - dist, decrypt_text(doc.page_content, context=f"{file_hash}:{page}"))
+                        for doc, dist in scored
+                        if doc.page_content
+                    ]
                     best.sort(key=lambda t: t[0], reverse=True)
                     # the best one, plus the runner-up only if it is nearly as close
                     result["best"] = [text for i, (score, text) in enumerate(best) if i == 0 or score >= best[0][0] - 0.05]

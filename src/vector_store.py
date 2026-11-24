@@ -48,6 +48,8 @@ from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 from langchain_huggingface import HuggingFaceEmbeddings
 from rank_bm25 import BM25Okapi
+
+from crypto_store import decrypt_text, encrypt_text
 from sentence_transformers import CrossEncoder
 
 from ingest import Chunk
@@ -60,6 +62,12 @@ PERSIST_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "chroma_db")
 CANDIDATES = 20   # how many chunks each search hands to the merge/rerank step
 RRF_K = 60        # standard smoothing constant for Reciprocal Rank Fusion
 MIN_CHUNK_CHARS = 30   # ignore chunks shorter than this (slide titles, stray headings)
+
+
+def _chunk_context(meta: dict) -> str:
+    """What a stored chunk is bound to: its document and page. A chunk copied
+    into another document or page then fails to decrypt."""
+    return f"{meta.get('file_hash')}:{meta.get('page_number')}"
 
 
 def tokenize(text: str) -> List[str]:
@@ -129,6 +137,12 @@ class RoleFilteredRetriever(BaseRetriever):
         data = self.vectorstore.get(
             where=where, include=["documents", "metadatas", "embeddings"]
         )
+        # Chunk text may be stored encrypted. Decrypt it here, before any ranking,
+        # so the keyword search and the reranker work on the real text.
+        data["documents"] = [
+            decrypt_text(t, context=_chunk_context(m))
+            for t, m in zip(data["documents"], data["metadatas"])
+        ]
         # Drop tiny chunks (title-only slides) before any ranking.
         keep = [i for i, t in enumerate(data["documents"]) if len(t.strip()) >= MIN_CHUNK_CHARS]
         if not keep:
@@ -221,9 +235,15 @@ class VectorStore:
                 )
                 for c in batch
             ]
-            self.vectorstore.add_documents(
-                documents,
+            # The search vectors are made from the REAL text; only the stored copy of the
+            # text is encrypted (a no-op while encryption is off). add_documents would embed
+            # whatever text it is given, so the vectors are computed here first.
+            vectors = self.embeddings.embed_documents([d.page_content for d in documents])
+            self.vectorstore._collection.upsert(
                 ids=[f"{user_id}::{c.chunk_id}" for c in batch],  # keep ids globally unique across users
+                embeddings=vectors,
+                documents=[encrypt_text(d.page_content, context=_chunk_context(d.metadata)) for d in documents],
+                metadatas=[d.metadata for d in documents],
             )
             total_added += len(batch)
 

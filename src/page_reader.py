@@ -33,6 +33,8 @@ from typing import Optional
 
 import fitz  # PyMuPDF
 
+from crypto_store import EncryptionError, decrypt_text, encrypt_text
+
 CACHE_DIR = Path(__file__).resolve().parent.parent / "data" / "page_cache"
 
 # --- settings (can be overridden with environment variables) -----------------
@@ -181,17 +183,17 @@ class PageEnricher:
         self.cache = {"settings": CACHE_SETTINGS, "pages": {}}
         self._repeated = None  # filled on first page, once the whole document is known
         try:
-            loaded = json.loads(self.path.read_text(encoding="utf-8"))
+            loaded = json.loads(decrypt_text(self.path.read_text(encoding="utf-8"), context=self.path.stem))
             if loaded.get("settings") == CACHE_SETTINGS:
                 self.cache = loaded  # same settings: reuse. Otherwise start fresh.
-        except (OSError, ValueError):
-            pass
+        except (OSError, ValueError, EncryptionError):
+            pass  # no usable cache (missing, damaged or tampered): it is simply rebuilt
 
     def _save(self) -> None:
         try:
             CACHE_DIR.mkdir(parents=True, exist_ok=True)
             tmp = self.path.with_suffix(".part")
-            tmp.write_text(json.dumps(self.cache), encoding="utf-8")
+            tmp.write_text(encrypt_text(json.dumps(self.cache), context=self.path.stem), encoding="utf-8")
             os.replace(tmp, self.path)  # a half-written cache file is never read
         except OSError as e:
             _warn(f"could not save cache: {e}")

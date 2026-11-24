@@ -86,6 +86,20 @@ install_login_lockout(app)
 from password_reset import make_router as make_reset_router
 app.include_router(make_reset_router())
 
+# Encryption at rest: stop now, with a clear message, if the data is encrypted and
+# the passphrase is missing or wrong (instead of failing later on the first request).
+import audit_log as _audit_settings  # noqa: E402
+import crypto_store  # noqa: E402
+
+crypto_store.startup_check()
+if crypto_store.enabled():
+    log_msg = "Encryption at rest is ON."
+    if _audit_settings.LOG_QUESTION_TEXT:
+        # The audit log is append-only and can't be encrypted afterwards, so questions
+        # must never be written into it while the rest of the data is encrypted.
+        raise RuntimeError("LOG_QUESTION_TEXT must be off while encryption at rest is on.")
+    print(log_msg, flush=True)
+
 install_audit_log(app)
 
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB — matches the limit shown in the frontend

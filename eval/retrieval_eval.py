@@ -27,7 +27,16 @@ def load_collection():
     client = chromadb.PersistentClient(path=str(CHROMA_PATH))
     col = client.get_collection(COLLECTION_NAME)
     data = col.get(include=["documents", "metadatas"])
-    return col, data["ids"], data["documents"], data["metadatas"]
+    # Stored chunk text may be encrypted: decrypt it the same way the app does.
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+    from crypto_store import decrypt_text
+
+    docs = [
+        decrypt_text(text, context=f"{m.get('file_hash')}:{m.get('page_number')}")
+        for text, m in zip(data["documents"], data["metadatas"])
+    ]
+    return col, data["ids"], docs, data["metadatas"]
 
 
 def parse_pages(s):

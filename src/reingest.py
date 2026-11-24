@@ -28,11 +28,14 @@ Take a backup first:   cp -r data/chroma_db data/chroma_db_backup
 """
 
 import argparse
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from crypto_store import decrypt_bytes  # noqa: E402
 from ingest import ingest_pdf  # noqa: E402
 from vector_store import VectorStore  # noqa: E402
 
@@ -64,11 +67,21 @@ def main() -> None:
             print(f"  would re-read {name}  (now {old_count} chunks)")
             continue
 
+        tmp_path = None
         try:
-            chunks = ingest_pdf(str(pdf))  # step 1: read with the new reader
+            # The saved copy may be encrypted, and the reader needs a normal PDF file:
+            # decrypt into a temporary file, read it, and always delete it afterwards.
+            data = decrypt_bytes(pdf.read_bytes(), context=file_hash.encode())
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                tmp.write(data)
+                tmp_path = tmp.name
+            chunks = ingest_pdf(tmp_path)  # step 1: read with the new reader
         except Exception as e:
             print(f"  FAILED {name}: {e}  -> old chunks left untouched")
             continue
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                os.unlink(tmp_path)
         for c in chunks:
             c.source_file = name  # ingest_pdf names chunks after the file on disk (the hash); restore the real name
 

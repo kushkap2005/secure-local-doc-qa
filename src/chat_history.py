@@ -129,6 +129,19 @@ def _get_owned(conn, conversation_id: str, username: str):
     return row
 
 
+from crypto_store import decrypt_text, encrypt_text  # noqa: E402
+
+
+def _enc(value, conversation_id: str, field: str):
+    """Encrypt one stored text field (a no-op while encryption is off). The value is
+    bound to its conversation and field, so it can't be moved into another one."""
+    return None if value is None else encrypt_text(value, context=f"{conversation_id}:{field}")
+
+
+def _dec(value, conversation_id: str, field: str):
+    return None if value is None else decrypt_text(value, context=f"{conversation_id}:{field}")
+
+
 def make_router() -> APIRouter:
     init_chat_tables()
     router = APIRouter()
@@ -150,7 +163,10 @@ def make_router() -> APIRouter:
             ).fetchall()
         finally:
             conn.close()
-        return [{"id": r["id"], "title": r["title"], "question_count": r["question_count"]} for r in rows]
+        return [
+            {"id": r["id"], "title": _dec(r["title"], r["id"], "title"), "question_count": r["question_count"]}
+            for r in rows
+        ]
 
     @router.post("/conversations")
     def create_conversation(
@@ -162,7 +178,7 @@ def make_router() -> APIRouter:
         try:
             conn.execute(
                 "INSERT INTO conversations (id, username, title, updated_at) VALUES (?, ?, ?, ?)",
-                (conversation_id, current_user["username"], title, _now()),
+                (conversation_id, current_user["username"], _enc(title, conversation_id, "title"), _now()),
             )
             conn.commit()
         finally:
@@ -190,13 +206,14 @@ def make_router() -> APIRouter:
 
         messages = []
         for r in rows:
-            m = {"role": r["role"], "text": r["text"], "time": r["created_at"]}
+            m = {"role": r["role"], "text": _dec(r["text"], conversation_id, "text"), "time": r["created_at"]}
             if r["role"] == "assistant":
-                m["question"] = r["question"]
-                m["sources"] = json.loads(r["sources"]) if r["sources"] else []
+                m["question"] = _dec(r["question"], conversation_id, "question")
+                sources = _dec(r["sources"], conversation_id, "sources")
+                m["sources"] = json.loads(sources) if sources else []
                 m["isError"] = False
             messages.append(m)
-        return {"id": conversation_id, "title": conv["title"], "messages": messages}
+        return {"id": conversation_id, "title": _dec(conv["title"], conversation_id, "title"), "messages": messages}
 
     @router.post("/conversations/{conversation_id}/messages")
     def save_exchange(
@@ -222,19 +239,25 @@ def make_router() -> APIRouter:
             conn.execute(
                 "INSERT INTO conversation_messages (conversation_id, role, text, question, sources, created_at)"
                 " VALUES (?, 'user', ?, NULL, NULL, ?)",
-                (conversation_id, body.question, now),
+                (conversation_id, _enc(body.question, conversation_id, "text"), now),
             )
             conn.execute(
                 "INSERT INTO conversation_messages (conversation_id, role, text, question, sources, created_at)"
                 " VALUES (?, 'assistant', ?, ?, ?, ?)",
-                (conversation_id, body.answer, body.question, sources_json, now),
+                (
+                    conversation_id,
+                    _enc(body.answer, conversation_id, "text"),
+                    _enc(body.question, conversation_id, "question"),
+                    _enc(sources_json, conversation_id, "sources"),
+                    now,
+                ),
             )
-            title = conv["title"]
+            title = _dec(conv["title"], conversation_id, "title")
             if title == DEFAULT_TITLE:
                 title = _title_from(body.question)
             conn.execute(
                 "UPDATE conversations SET title = ?, updated_at = ? WHERE id = ?",
-                (title, now, conversation_id),
+                (_enc(title, conversation_id, "title"), now, conversation_id),
             )
             conn.commit()
         finally:
@@ -254,7 +277,10 @@ def make_router() -> APIRouter:
         try:
             _get_owned(conn, conversation_id, current_user["username"])
             # updated_at is left alone: renaming shouldn't reorder the history
-            conn.execute("UPDATE conversations SET title = ? WHERE id = ?", (title, conversation_id))
+            conn.execute(
+                "UPDATE conversations SET title = ? WHERE id = ?",
+                (_enc(title, conversation_id, "title"), conversation_id),
+            )
             conn.commit()
         finally:
             conn.close()
