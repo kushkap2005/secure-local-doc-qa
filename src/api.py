@@ -53,6 +53,10 @@ from database import (
     get_user_by_username,
     init_db,
     set_document_permission,
+    set_document_owner,
+    get_document_owner,
+    get_all_document_owners,
+    delete_document_permission,
     update_user_role,
 )
 from ingest import ingest_file, ingest_pdf
@@ -241,8 +245,15 @@ def list_documents(current_user: dict = Depends(require_role("Guest"))):
     documents = store.list_documents(SHARED_DOCS_ID)
     levels = get_all_document_roles()
     allowed = set(get_accessible_file_hashes(current_user["role"], [d["file_hash"] for d in documents]))
+    owners = get_all_document_owners()
+    is_admin = current_user["role"] == "Admin"
     return [
-        {**doc, "min_role": levels.get(doc["file_hash"], DEFAULT_REQUIRED_ROLE)}
+        {
+            **doc,
+            "min_role": levels.get(doc["file_hash"], DEFAULT_REQUIRED_ROLE),
+            # The button is shown only when the server would accept the delete.
+            "can_delete": is_admin or owners.get(doc["file_hash"]) == current_user["username"],
+        }
         for doc in documents
         if doc["file_hash"] in allowed
     ]
@@ -266,7 +277,7 @@ def _rollback_chunks(file_hash: str) -> None:
         log.exception("Rollback failed for document %s", file_hash[:12])
 
 
-def _process_upload(tmp_path: str, file_hash: str, filename: str, min_role: str) -> int:
+def _process_upload(tmp_path: str, file_hash: str, filename: str, min_role: str, uploader: str = "") -> int:
     """Index one uploaded PDF and return how many chunks were added.
 
     Runs in a worker thread (see upload()), so slow OCR / vision work does not
@@ -305,6 +316,8 @@ def _process_upload(tmp_path: str, file_hash: str, filename: str, min_role: str)
             # Recorded AFTER the chunks are stored. If the process dies in between,
             # the document has no level and stays Admin-only (default deny), not public.
             set_document_permission(file_hash, min_role)
+            if uploader:
+                set_document_owner(file_hash, uploader)  # lets this user delete the document later
             if tmp_path.lower().endswith(".pdf"):
                 save_pdf(tmp_path, file_hash)  # keep the original so the PDF viewer can open it
         except Exception:
@@ -366,7 +379,7 @@ async def upload(
         file_hash = hasher.hexdigest()
 
         chunks_added = await run_in_threadpool(
-            _process_upload, tmp_path, file_hash, file.filename, min_role
+            _process_upload, tmp_path, file_hash, file.filename, min_role, current_user["username"]
         )
     finally:
         if tmp_path:
@@ -420,6 +433,53 @@ def reset(current_user: dict = Depends(require_role("Admin"))):
     clear_document_permissions()  # no documents left, so forget their levels too
     delete_all_pdfs()  # and the stored PDF files
     return {"chunks_indexed": store.count(SHARED_DOCS_ID)}
+
+
+@app.delete("/documents/{file_hash}")
+def delete_document(file_hash: str, current_user: dict = Depends(require_role("Guest"))):
+    """Delete ONE document: its uploader, or any Admin. Removes its chunks, its level
+    and owner record, the stored PDF and the page-text cache, then writes an audit line."""
+    import re
+    from pathlib import Path
+    import audit_log
+    from pdf_files import delete_pdf
+
+    if not re.fullmatch(r"[0-9a-fA-F]{64}", file_hash):
+        raise HTTPException(status_code=404, detail="No such document.")
+
+    stored = {d["file_hash"]: d for d in store.list_documents(SHARED_DOCS_ID)}
+    doc = stored.get(file_hash)
+    # A document the caller's role may not even see is reported as missing, like the PDF viewer does.
+    if doc is None or file_hash not in get_accessible_file_hashes(current_user["role"], [file_hash]):
+        raise HTTPException(status_code=404, detail="No such document.")
+
+    owner = get_document_owner(file_hash)
+    if current_user["role"] != "Admin" and owner != current_user["username"]:
+        raise HTTPException(status_code=403, detail="Only the uploader or an Admin can delete this document.")
+
+    try:
+        store.vectorstore.delete(
+            where={"$and": [{"user_id": SHARED_DOCS_ID}, {"file_hash": file_hash}]}
+        )
+    except Exception:
+        log.exception("Deleting the chunks of document %s failed", file_hash[:12])
+        raise HTTPException(status_code=500, detail="Couldn't delete the document. Nothing else was removed.")
+
+    delete_document_permission(file_hash)
+    delete_pdf(file_hash)
+    cache = Path(__file__).resolve().parent.parent / "data" / "page_cache" / f"{file_hash}.json"
+    try:
+        cache.unlink()
+    except FileNotFoundError:
+        pass
+    except OSError:
+        log.exception("Could not delete the page cache of %s", file_hash[:12])
+
+    audit_log.record(
+        current_user["username"], current_user["role"], "document_deleted",
+        doc["source_file"], f"{doc['chunks']} chunks removed",
+    )
+    return {"deleted": doc["source_file"], "file_hash": file_hash}
 
 
 # ---------------------------------------------------------------------------

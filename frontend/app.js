@@ -35,6 +35,11 @@ const STRINGS = {
   resetSuccess: "All documents and chunks cleared.",
   resetError: "Couldn't clear documents.",
 
+  deleteConfirm: (name) => `Delete "${name}"? Its text, stored copy and search entries are removed. This can't be undone.`,
+  deleteSuccess: (name) => `Deleted "${name}".`,
+  deleteError: "Couldn't delete the document.",
+  deleteForbidden: "Only the uploader or an Admin can delete this document.",
+
   copyAnswer: "Copy",
   copied: "Copied",
   citationCopied: "Citation copied",
@@ -390,6 +395,13 @@ function renderDocList() {
               </button>`
             : ""
         }
+        ${
+          doc.canDelete
+            ? `<button type="button" class="icon-btn icon-btn-sm doc-delete-btn" data-hash="${escapeHtml(doc.file_hash)}" aria-label="Delete ${escapeHtml(doc.name)}" title="Delete this document">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>`
+            : ""
+        }
       </li>`
     )
     .join("");
@@ -397,7 +409,24 @@ function renderDocList() {
   el.docList.querySelectorAll(".doc-level-btn").forEach((btn) => {
     btn.addEventListener("click", () => openDocLevelDialog(btn.dataset.hash));
   });
+  el.docList.querySelectorAll(".doc-delete-btn").forEach((btn) => {
+    btn.addEventListener("click", () => deleteDocument(btn.dataset.hash));
+  });
   applyDocFilter();
+}
+
+/** Deletes one document after a confirmation. The server re-checks who is allowed. */
+async function deleteDocument(fileHash) {
+  const doc = state.documents.find((d) => d.file_hash === fileHash);
+  if (!doc || !doc.canDelete) return;
+  if (!window.confirm(STRINGS.deleteConfirm(doc.name))) return;
+  const res = await Api.deleteDocument(fileHash);
+  if (!res.ok) {
+    showToast(res.status === 403 ? STRINGS.deleteForbidden : res.message || STRINGS.deleteError, { type: "error" });
+    return;
+  }
+  showToast(STRINGS.deleteSuccess(doc.name), { type: "success" });
+  await loadDocuments();
 }
 
 function applyDocFilter() {
@@ -421,6 +450,7 @@ async function loadDocuments() {
     name: d.source_file,
     chunks: d.chunks,
     minRole: d.min_role,
+    canDelete: !!d.can_delete, // the server decides: the uploader or an Admin
   }));
   renderDocList();
 }

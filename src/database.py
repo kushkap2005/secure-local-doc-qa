@@ -43,6 +43,10 @@ def init_db() -> None:
             required_role TEXT NOT NULL
         )
     """)
+    # Added later: who uploaded each document. Older documents stay NULL (only an Admin may delete them).
+    columns = [row["name"] for row in conn.execute("PRAGMA table_info(document_permissions)")]
+    if "uploaded_by" not in columns:
+        conn.execute("ALTER TABLE document_permissions ADD COLUMN uploaded_by TEXT")
     conn.commit()
     conn.close()
 
@@ -198,6 +202,38 @@ def clear_document_permissions() -> None:
     """Forget every recorded document level (used when all documents are cleared)."""
     conn = get_connection()
     conn.execute("DELETE FROM document_permissions")
+    conn.commit()
+    conn.close()
+
+
+def set_document_owner(file_hash: str, username: str) -> None:
+    """Record who uploaded a document (the row is created by set_document_permission)."""
+    conn = get_connection()
+    conn.execute("UPDATE document_permissions SET uploaded_by = ? WHERE file_hash = ?", (username, file_hash))
+    conn.commit()
+    conn.close()
+
+
+def get_document_owner(file_hash: str):
+    """The username that uploaded this document, or None for older documents."""
+    conn = get_connection()
+    row = conn.execute("SELECT uploaded_by FROM document_permissions WHERE file_hash = ?", (file_hash,)).fetchone()
+    conn.close()
+    return row["uploaded_by"] if row else None
+
+
+def get_all_document_owners() -> dict:
+    """Every recorded uploader as {file_hash: username}, in one query."""
+    conn = get_connection()
+    rows = conn.execute("SELECT file_hash, uploaded_by FROM document_permissions").fetchall()
+    conn.close()
+    return {row["file_hash"]: row["uploaded_by"] for row in rows}
+
+
+def delete_document_permission(file_hash: str) -> None:
+    """Forget the level and owner of one document (used when that document is deleted)."""
+    conn = get_connection()
+    conn.execute("DELETE FROM document_permissions WHERE file_hash = ?", (file_hash,))
     conn.commit()
     conn.close()
 

@@ -128,6 +128,11 @@ const Api = {
     });
   },
 
+  /** Delete one document. The server allows the uploader or an Admin; anyone else gets 403. */
+  async deleteDocument(fileHash) {
+    return request(`/documents/${encodeURIComponent(fileHash)}`, { method: "DELETE" });
+  },
+
   // Admin-only on the server; a non-admin gets 403 whatever this page shows.
   async createUser(username, password, role) {
     return request("/admin/users", {

@@ -93,6 +93,20 @@ def delete_all_pdfs() -> None:
         pass
 
 
+def delete_pdf(file_hash: str) -> None:
+    """Remove the stored PDF of one document (used when that document is deleted)."""
+    if not re.fullmatch(r"[0-9a-fA-F]{64}", file_hash or ""):
+        return  # never build a file path from anything that is not a content hash
+    target = _path_for(file_hash)
+    for path in (target, target + ".part"):
+        try:
+            os.unlink(path)
+        except FileNotFoundError:
+            pass
+        except OSError:
+            log.exception("Could not delete %s", path)
+
+
 def _chunk_order(chunk_id: str) -> int:
     """Chunks of a page come back in any order; their ids end in _c<number>."""
     m = re.search(r"_c(\d+)$", chunk_id or "")

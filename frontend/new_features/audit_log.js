@@ -29,6 +29,7 @@
     pdf_opened: "Opened a PDF",
     pdf_denied_or_missing: "PDF not available to them",
     clear_all_documents: "Cleared all documents",
+    document_deleted: "Deleted a document",
     password_changed: "Changed their password",
     password_change_failed: "Password change failed",
     password_reset_requested: "Asked for a password reset (Forgot password)",
