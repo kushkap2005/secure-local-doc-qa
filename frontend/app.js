@@ -387,7 +387,7 @@ function renderDocList() {
           <path d="M14 3v4h4" stroke="currentColor" stroke-width="1.4"/>
         </svg>
         <span class="doc-item-name" title="${escapeHtml(doc.name)}">${escapeHtml(doc.name)}</span>
-        <span class="doc-item-chunks" title="Who can see this document">${doc.chunks} chunks · ${escapeHtml(LEVEL_LABELS[doc.minRole] || doc.minRole)}</span>
+        <span class="doc-item-chunks" title="Who can see this document">${doc.chunks} chunks · ${doc.mine ? "Yours · " : ""}${escapeHtml(LEVEL_LABELS[doc.minRole] || doc.minRole)}</span>
         ${
           canEdit
             ? `<button type="button" class="icon-btn icon-btn-sm doc-level-btn" data-hash="${escapeHtml(doc.file_hash)}" aria-label="Change who can see ${escapeHtml(doc.name)}" title="Change who can see this">
@@ -451,6 +451,7 @@ async function loadDocuments() {
     chunks: d.chunks,
     minRole: d.min_role,
     canDelete: !!d.can_delete, // the server decides: the uploader or an Admin
+    mine: !!d.uploaded_by_me, // you uploaded it: shown as "Yours" in the row
   }));
   renderDocList();
 }

@@ -10,6 +10,7 @@ Who can call what (roles are hierarchical: Admin > Staff > Guest):
   POST   /ask                          Guest and above (searches only documents your role may see)
   POST   /upload                       Staff and above (uploader picks who can see the document)
   DELETE /reset                        Admin only
+  DELETE /documents/{file_hash}        the uploader or an Admin (deletes one document)
   POST   /admin/users                  Admin only (create an account)
   PUT    /admin/users/{username}/role  Admin only (change someone's role)
   PUT    /admin/documents/{file_hash}/role  Admin only (change who can see a document)
@@ -253,6 +254,8 @@ def list_documents(current_user: dict = Depends(require_role("Guest"))):
             "min_role": levels.get(doc["file_hash"], DEFAULT_REQUIRED_ROLE),
             # The button is shown only when the server would accept the delete.
             "can_delete": is_admin or owners.get(doc["file_hash"]) == current_user["username"],
+            # Lets the page mark the documents this user uploaded ("Yours").
+            "uploaded_by_me": owners.get(doc["file_hash"]) == current_user["username"],
         }
         for doc in documents
         if doc["file_hash"] in allowed

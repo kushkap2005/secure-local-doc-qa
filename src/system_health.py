@@ -1,18 +1,25 @@
 """
-system_health.py - the numbers behind the extra rows in the left "System status" panel.
+system_health.py - the numbers behind the left "System status" panel.
 
 One route, any signed-in role (Guest, Staff or Admin):
 
     GET /system/health
 
-Returns:
-  - llm:        is the local LLM server (Ollama) answering, and is the model this
-                app is set to use installed there? (yes/no only, no model list)
-  - embedding:  is the embedding model loaded in this server process?
-  - last_upload: the newest successful upload THIS ROLE IS ALLOWED TO SEE
-                (file name and time). An upload of an Admin-only file never
-                shows up for a Guest, not even as a name.
-  - search:     the relevance cutoff the answers are filtered with.
+What each role gets back. The SERVER decides (least privilege), so hiding rows
+in the page is only for looks, never the protection itself:
+
+  Admin            the full operator view:
+                     - ready:       True when the language model AND the embedding
+                                    model are both usable
+                     - llm:         "ok", "down" (Ollama not answering) or
+                                    "model_missing" (Ollama runs, model not pulled)
+                     - embedding:   is the embedding model loaded in this server process?
+                     - last_upload: the newest successful upload this role may see
+                                    (file name and time)
+                     - search:      the relevance cutoff the answers are filtered with
+  Staff and Guest  only {"ready": true/false}: can the assistant answer right now?
+                   Model states, upload names and the cutoff are operator details
+                   they don't need.
 
 It only READS. The Ollama answer is remembered for a few seconds so the page's
 polling never hammers the local server.
@@ -77,6 +84,12 @@ def make_router(store, shared_docs_id, visible_hashes) -> APIRouter:
             llm_state = "ok"
         else:
             llm_state = "model_missing"
+        embedding_loaded = bool(getattr(store, "embeddings", None))
+        ready = llm_state == "ok" and embedding_loaded
+
+        if current_user["role"] != "Admin":
+            # Least privilege: Staff and Guests only need to know whether answers will work.
+            return {"ready": ready}
 
         allowed = set(visible_hashes(current_user["role"]))
         try:
@@ -85,8 +98,9 @@ def make_router(store, shared_docs_id, visible_hashes) -> APIRouter:
             names = set()
 
         return {
+            "ready": ready,
             "llm": llm_state,
-            "embedding": bool(getattr(store, "embeddings", None)),
+            "embedding": embedding_loaded,
             "last_upload": _last_visible_upload(names),
             "search": {"relevance_cutoff": _setting("rag_pipeline", "RELEVANCE_THRESHOLD")},
         }
